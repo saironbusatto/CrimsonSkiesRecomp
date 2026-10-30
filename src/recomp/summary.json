@@ -1,0 +1,92 @@
+{
+  "total": 11212,
+  "translated": 11212,
+  "failed": 0,
+  "total_lines": 1301248,
+  "unresolved_stubs": 388,
+  "manual_functions": 0,
+  "unimplemented": {
+    "lds": [
+      288652,
+      288652,
+      288652,
+      288652,
+      288652
+    ],
+    "outsb": [
+      288676,
+      288676,
+      288676,
+      288676,
+      288676
+    ],
+    "hlt": [
+      290088
+    ],
+    "insb": [
+      290089,
+      290101
+    ],
+    "ljmp": [
+      290092,
+      1884221
+    ],
+    "insd": [
+      290109
+    ],
+    "int1": [
+      565544,
+      1503713,
+      1503713
+    ],
+    "str": [
+      985522,
+      985526
+    ],
+    "salc": [
+      1128788
+    ],
+    "aaa": [
+      1128789
+    ],
+    "wbinvd": [
+      1245344
+    ],
+    "les": [
+      1754277,
+      1754285,
+      1754293,
+      1754305
+    ],
+    "cli": [
+      1873638,
+      1884213
+    ],
+    "sti": [
+      1873645,
+      1884220
+    ],
+    "sgdt": [
+      1884204
+    ]
+  },
+  "files": [
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_funcs.h",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0000.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0001.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0002.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0003.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0004.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0005.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0006.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0007.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0008.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0009.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0010.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_0011.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_stubs_unresolved.c",
+    "/home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_dispatch.c"
+  ],
+  "num_chunks": 12,
+  "chunk_size": 1000
+}
