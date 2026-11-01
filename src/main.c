@@ -218,34 +218,42 @@ static void posix_fault_handler(int sig, siginfo_t *si, void *uc)
 }
 #endif
 
+static void *s_xbe_data = NULL;
+static size_t s_xbe_size = 0;
+
 /* ── Boot and Execution ───────────────────────────────────── */
 static int boot_and_run(void)
 {
-    void *xbe_data = NULL;
-    size_t xbe_size = 0;
-
-    printf("[BOOT] Loading XBE from: %s\n", s_xbe_path);
-    if (!load_xbe(s_xbe_path, &xbe_data, &xbe_size)) {
-        fprintf(stderr, "[ERROR] Failed to load XBE file.\n");
-#if defined(_WIN32)
-        MessageBoxA(NULL, "Failed to load XBE file.\n"
-                    "Please provide the path to Russian.xbe or default.xbe.",
-                    "Crimson Skies Recomp", MB_ICONERROR);
-#endif
-        return 1;
+    if (g_esp == 0) {
+        g_esp = 0x00F7FFF0u;
     }
-    printf("[BOOT] XBE loaded successfully (%zu bytes)\n", xbe_size);
+    g_seh_ebp = 0;
 
-    printf("[BOOT] Initializing Xbox memory layout...\n");
-    if (!xbox_MemoryLayoutInit(xbe_data, xbe_size)) {
-        fprintf(stderr, "[ERROR] Failed to initialize Xbox memory layout.\n");
+    if (!s_xbe_data) {
+        printf("[BOOT] Loading XBE from: %s\n", s_xbe_path);
+        if (!load_xbe(s_xbe_path, &s_xbe_data, &s_xbe_size)) {
+            fprintf(stderr, "[ERROR] Failed to load XBE file.\n");
 #if defined(_WIN32)
-        MessageBoxA(NULL, "Failed to initialize Xbox memory layout.\n"
-                    "Virtual address range may be unavailable.",
-                    "Crimson Skies Recomp", MB_ICONERROR);
+            MessageBoxA(NULL, "Failed to load XBE file.\n"
+                        "Please provide the path to English.xbe or default.xbe.",
+                        "Crimson Skies Recomp", MB_ICONERROR);
 #endif
-        free(xbe_data);
-        return 1;
+            return 1;
+        }
+        printf("[BOOT] XBE loaded successfully (%zu bytes)\n", s_xbe_size);
+
+        printf("[BOOT] Initializing Xbox memory layout...\n");
+        if (!xbox_MemoryLayoutInit(s_xbe_data, s_xbe_size)) {
+            fprintf(stderr, "[ERROR] Failed to initialize Xbox memory layout.\n");
+#if defined(_WIN32)
+            MessageBoxA(NULL, "Failed to initialize Xbox memory layout.\n"
+                        "Virtual address range may be unavailable.",
+                        "Crimson Skies Recomp", MB_ICONERROR);
+#endif
+            free(s_xbe_data);
+            s_xbe_data = NULL;
+            return 1;
+        }
     }
 
     g_xbox_mem_offset = xbox_GetMemoryOffset();
@@ -287,7 +295,10 @@ static int boot_and_run(void)
     printf("\n[EXEC] Game execution returned normally. Shutting down...\n");
     xbox_kernel_shutdown();
     xbox_MemoryLayoutShutdown();
-    free(xbe_data);
+    if (s_xbe_data) {
+        free(s_xbe_data);
+        s_xbe_data = NULL;
+    }
 
     return 0;
 }
@@ -340,6 +351,18 @@ int main(int argc, char **argv)
         }
         if (!found) {
             snprintf(s_xbe_path, sizeof(s_xbe_path), "%s", DEFAULT_XBE_NAME);
+        }
+    }
+
+    /* Initialize memory layout early before any display or sound subsystems map buffers */
+    printf("[BOOT] Loading XBE from: %s\n", s_xbe_path);
+    if (load_xbe(s_xbe_path, &s_xbe_data, &s_xbe_size)) {
+        printf("[BOOT] XBE loaded successfully (%zu bytes)\n", s_xbe_size);
+        printf("[BOOT] Initializing Xbox memory layout...\n");
+        if (!xbox_MemoryLayoutInit(s_xbe_data, s_xbe_size)) {
+            fprintf(stderr, "[WARN] Early memory layout init failed; will retry in guest context\n");
+            free(s_xbe_data);
+            s_xbe_data = NULL;
         }
     }
 
