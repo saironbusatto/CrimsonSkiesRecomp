@@ -4760,7 +4760,12 @@ static void bridge_NtReadFile(void)
          * whatever precedes the file it actually wants, and a read that stops
          * early looks identical to one that never started -- until you can
          * see where each one landed. */
-        if (poff)
+        static int log_reads = -1;
+        if (log_reads < 0)
+            log_reads = getenv("RECOMP_LOG_READS") != NULL;
+        if (!log_reads)
+            ;
+        else if (poff)
             fprintf(stderr, "  [READ] from=0x%08X ev=%08X apc=%08X @%lld want=%u got=%u st=0x%08X  %02X %02X %02X %02X\n",
                     g_xbox_kernel_caller, STACK_ARG(1), STACK_ARG(2),
                     (long long)off.QuadPart, length, got,

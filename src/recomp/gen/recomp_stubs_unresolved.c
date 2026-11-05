@@ -545,23 +545,9 @@ void sub_0020386A(void) { RECOMP_STUB_HIT(0x0020386Au); g_esp += 4; /* 0x0020386
 void sub_00203942(void) { RECOMP_STUB_HIT(0x00203942u); g_esp += 4; /* 0x00203942: not detected */ }
 void sub_00203D47(void) { RECOMP_STUB_HIT(0x00203D47u); g_esp += 4; /* 0x00203D47: not detected */ }
 void sub_002041B5(void) { RECOMP_STUB_HIT(0x002041B5u); g_eax = 0; g_esp += 28; /* 0x002041B5: ret 24 */ }
-void sub_002044EB(void) { RECOMP_STUB_HIT(0x002044EBu); g_esp += 12; /* 0x002044EB: ret 8 */ }
 void sub_002045C0(void) { RECOMP_STUB_HIT(0x002045C0u); g_esp += 4; /* 0x002045C0: not detected */ }
 void sub_00204780(void) { RECOMP_STUB_HIT(0x00204780u); g_esp += 4; /* 0x00204780: not detected */ }
 void sub_00204A01(void) { RECOMP_STUB_HIT(0x00204A01u); g_esp += 16; /* 0x00204A01: ret 12 */ }
-void sub_00204C63(void) { RECOMP_STUB_HIT(0x00204C63u); g_esp += 4; /* 0x00204C63: not detected */ }
-void sub_00204C8C(void) { RECOMP_STUB_HIT(0x00204C8Cu); g_esp += 4; /* 0x00204C8C: not detected */ }
-void sub_00204CE4(void) { RECOMP_STUB_HIT(0x00204CE4u); g_esp += 4; /* 0x00204CE4: not detected */ }
-void sub_00204CE6(void) { RECOMP_STUB_HIT(0x00204CE6u); g_esp += 4; /* 0x00204CE6: not detected */ }
-void sub_00204D10(void) { RECOMP_STUB_HIT(0x00204D10u); g_esp += 12; /* 0x00204D10: ret 8 */ }
-void sub_00204D20(void) { RECOMP_STUB_HIT(0x00204D20u); g_esp += 12; /* 0x00204D20: ret 8 */ }
-void sub_00204DE2(void) { RECOMP_STUB_HIT(0x00204DE2u); g_esp += 4; /* 0x00204DE2: not detected */ }
-void sub_00204DE4(void) { RECOMP_STUB_HIT(0x00204DE4u); g_esp += 4; /* 0x00204DE4: not detected */ }
-void sub_002050E8(void) { RECOMP_STUB_HIT(0x002050E8u); g_esp += 4; /* 0x002050E8: not detected */ }
-void sub_00205145(void) { RECOMP_STUB_HIT(0x00205145u); g_esp += 4; /* 0x00205145: not detected */ }
-void sub_00205314(void) { RECOMP_STUB_HIT(0x00205314u); g_esp += 4; /* 0x00205314: not detected */ }
-void sub_00205316(void) { RECOMP_STUB_HIT(0x00205316u); g_esp += 4; /* 0x00205316: not detected */ }
-void sub_00205345(void) { RECOMP_STUB_HIT(0x00205345u); g_esp += 8; /* 0x00205345: ret 4 */ }
 void sub_00205377(void) { RECOMP_STUB_HIT(0x00205377u); g_esp += 4; /* 0x00205377: not detected */ }
 void sub_00205383(void) { RECOMP_STUB_HIT(0x00205383u); g_esp += 8; /* 0x00205383: ret 4 */ }
 void sub_002053CD(void) { RECOMP_STUB_HIT(0x002053CDu); g_esp += 8; /* 0x002053CD: ret 4 */ }
@@ -570,7 +556,6 @@ void sub_002053D6(void) { RECOMP_STUB_HIT(0x002053D6u); g_edi = MEM32(g_esp); g_
 void sub_00205425(void) { RECOMP_STUB_HIT(0x00205425u); g_esp += 4; /* 0x00205425: not detected */ }
 void sub_0020545C(void) { RECOMP_STUB_HIT(0x0020545Cu); g_esp += 4; /* 0x0020545C: not detected */ }
 void sub_00205461(void) { RECOMP_STUB_HIT(0x00205461u); g_esp += 4; /* 0x00205461: not detected */ }
-void sub_002054B0(void) { RECOMP_STUB_HIT(0x002054B0u); g_esp += 8; /* 0x002054B0: ret 4 */ }
 void sub_00205582(void) { RECOMP_STUB_HIT(0x00205582u); g_esp += 8; /* 0x00205582: ret 4 */ }
 void sub_002055BA(void) { RECOMP_STUB_HIT(0x002055BAu); g_esp += 8; /* 0x002055BA: ret 4 */ }
 void sub_002055C2(void) { RECOMP_STUB_HIT(0x002055C2u); g_esp += 8; /* 0x002055C2: ret 4 */ }
@@ -617,15 +602,7 @@ void sub_002080CB(void) { RECOMP_STUB_HIT(0x002080CBu); g_esp += 4; /* 0x002080C
 void sub_002080DC(void) { RECOMP_STUB_HIT(0x002080DCu); g_esp += 4; /* 0x002080DC: not detected */ }
 void sub_00208119(void) { RECOMP_STUB_HIT(0x00208119u); POP32(g_esp, g_esi); g_esp += 24; /* pop esi; add esp, 0x14; ret */ }
 void sub_0020876D(void) { RECOMP_STUB_HIT(0x0020876Du); g_esp += 4; /* 0x0020876D: not detected */ }
-void sub_00208E52(void) { RECOMP_STUB_HIT(0x00208E52u); POP32(g_esp, g_edi); POP32(g_esp, g_esi); g_esp += 24; /* pop edi, esi; add esp, 8; ret 12 */ }
-void sub_00208E5D(void) { RECOMP_STUB_HIT(0x00208E5Du); POP32(g_esp, g_edi); POP32(g_esp, g_esi); g_esp += 24; /* pop edi, esi; add esp, 8; ret 12 */ }
-void sub_00208ED0(void) { RECOMP_STUB_HIT(0x00208ED0u); g_esp += 4; /* 0x00208ED0: not detected */ }
-void sub_002090DB(void) { RECOMP_STUB_HIT(0x002090DBu); g_esp += 4; /* 0x002090DB: not detected */ }
-void sub_002090EE(void) { RECOMP_STUB_HIT(0x002090EEu); g_esp += 4; /* 0x002090EE: not detected */ }
-void sub_002090F9(void) { RECOMP_STUB_HIT(0x002090F9u); g_esp += 4; /* 0x002090F9: not detected */ }
-void sub_00209120(void) { RECOMP_STUB_HIT(0x00209120u); g_esp += 36; /* 0x00209120: ret 32 */ }
 void sub_002091F8(void) { RECOMP_STUB_HIT(0x002091F8u); g_esp += 28; /* 0x002091F8: ret 24 */ }
-void sub_00209210(void) { RECOMP_STUB_HIT(0x00209210u); g_esp += 4; /* 0x00209210: not detected */ }
 void sub_00209332(void) { RECOMP_STUB_HIT(0x00209332u); g_esp += 4; /* 0x00209332: not detected */ }
 void sub_00209419(void) { RECOMP_STUB_HIT(0x00209419u); g_esp += 44; /* 0x00209419: ret 40 */ }
 void sub_00209F4E(void) { RECOMP_STUB_HIT(0x00209F4Eu); g_esp += 4; /* 0x00209F4E: not detected */ }
@@ -697,13 +674,10 @@ void sub_00235ADD(void) { RECOMP_STUB_HIT(0x00235ADDu); g_esp += 4; /* 0x00235AD
 void sub_00235B1C(void) { RECOMP_STUB_HIT(0x00235B1Cu); g_esp += 4; /* 0x00235B1C: not detected */ }
 void sub_0023617B(void) { RECOMP_STUB_HIT(0x0023617Bu); g_esp += 36; /* 0x0023617B: ret 32 */ }
 void sub_00236198(void) { RECOMP_STUB_HIT(0x00236198u); g_esp += 36; /* 0x00236198: ret 32 */ }
-void sub_002368FE(void) { RECOMP_STUB_HIT(0x002368FEu); g_esp += 4; /* 0x002368FE: not detected */ }
-void sub_0023693E(void) { RECOMP_STUB_HIT(0x0023693Eu); g_esp += 4; /* 0x0023693E: not detected */ }
 void sub_00236B2B(void) { RECOMP_STUB_HIT(0x00236B2Bu); g_esp += 8; /* 0x00236B2B: ret 4 */ }
 void sub_00236B2D(void) { RECOMP_STUB_HIT(0x00236B2Du); g_esp += 8; /* 0x00236B2D: ret 4 */ }
 void sub_00236BB4(void) { RECOMP_STUB_HIT(0x00236BB4u); g_esp += 4; /* 0x00236BB4: not detected */ }
 void sub_00236C73(void) { RECOMP_STUB_HIT(0x00236C73u); g_esp = g_ebp; POP32(g_esp, g_ebp); g_esp += 44; /* leave; ret 0x28 */ }
-void sub_002370E4(void) { RECOMP_STUB_HIT(0x002370E4u); g_esp += 4; /* 0x002370E4: not detected */ }
 void sub_002372A9(void) { RECOMP_STUB_HIT(0x002372A9u); g_esp += 4; /* 0x002372A9: not detected */ }
 void sub_002372DD(void) { RECOMP_STUB_HIT(0x002372DDu); g_edi = MEM32(g_esp); g_esp += 4; g_ebp = MEM32(g_esp); g_esp += 4; g_esp += 24; /* 0x002372DD: pop edi; pop ebp; ret 20 */ }
 void sub_0023730D(void) { RECOMP_STUB_HIT(0x0023730Du); g_esp += 4; /* 0x0023730D: not detected */ }
@@ -720,12 +694,8 @@ void sub_00237802(void) { RECOMP_STUB_HIT(0x00237802u); g_esp += 4; /* 0x0023780
 void sub_00237857(void) { RECOMP_STUB_HIT(0x00237857u); g_edi = MEM32(g_esp); g_esp += 4; g_ebp = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x00237857: pop edi; pop ebp; ret 12 */ }
 void sub_00237884(void) { RECOMP_STUB_HIT(0x00237884u); g_esp += 4; /* 0x00237884: not detected */ }
 void sub_002378AD(void) { RECOMP_STUB_HIT(0x002378ADu); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x002378AD: pop esi; ret 12 */ }
-void sub_002378E8(void) { RECOMP_STUB_HIT(0x002378E8u); g_esp += 4; /* 0x002378E8: not detected */ }
-void sub_0023798E(void) { RECOMP_STUB_HIT(0x0023798Eu); g_esp += 36; /* 0x0023798E: ret 32 */ }
 void sub_002379BB(void) { RECOMP_STUB_HIT(0x002379BBu); g_esp += 4; /* 0x002379BB: not detected */ }
 void sub_002379E0(void) { RECOMP_STUB_HIT(0x002379E0u); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 12; /* 0x002379E0: pop esi; ret 8 */ }
-void sub_00237A0C(void) { RECOMP_STUB_HIT(0x00237A0Cu); g_esp += 4; /* 0x00237A0C: not detected */ }
-void sub_00237A45(void) { RECOMP_STUB_HIT(0x00237A45u); g_ebx = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x00237A45: pop ebx; ret 12 */ }
 void sub_00237D0E(void) { RECOMP_STUB_HIT(0x00237D0Eu); g_esp += 4; /* 0x00237D0E: not detected */ }
 void sub_00237D48(void) { RECOMP_STUB_HIT(0x00237D48u); g_esi = MEM32(g_esp); g_esp += 4; g_ebp = MEM32(g_esp); g_esp += 4; g_esp += 20; /* 0x00237D48: pop esi; pop ebp; ret 16 */ }
 void sub_002380A1(void) { RECOMP_STUB_HIT(0x002380A1u); g_esp += 4; /* 0x002380A1: not detected */ }
@@ -734,12 +704,8 @@ void sub_002380EF(void) { RECOMP_STUB_HIT(0x002380EFu); g_esp += 4; /* 0x002380E
 void sub_00238111(void) { RECOMP_STUB_HIT(0x00238111u); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 12; /* 0x00238111: pop esi; ret 8 */ }
 void sub_0023813D(void) { RECOMP_STUB_HIT(0x0023813Du); g_esp += 4; /* 0x0023813D: not detected */ }
 void sub_0023815F(void) { RECOMP_STUB_HIT(0x0023815Fu); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 12; /* 0x0023815F: pop esi; ret 8 */ }
-void sub_0023818B(void) { RECOMP_STUB_HIT(0x0023818Bu); g_esp += 4; /* 0x0023818B: not detected */ }
-void sub_002381AD(void) { RECOMP_STUB_HIT(0x002381ADu); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 12; /* 0x002381AD: pop esi; ret 8 */ }
 void sub_002381FF(void) { RECOMP_STUB_HIT(0x002381FFu); g_esp += 4; /* 0x002381FF: not detected */ }
 void sub_00238251(void) { RECOMP_STUB_HIT(0x00238251u); g_esp += 4; /* 0x00238251: not detected */ }
-void sub_00238A1D(void) { RECOMP_STUB_HIT(0x00238A1Du); g_esp += 4; /* 0x00238A1D: not detected */ }
-void sub_00238A3F(void) { RECOMP_STUB_HIT(0x00238A3Fu); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 12; /* 0x00238A3F: pop esi; ret 8 */ }
 void sub_00238A6B(void) { RECOMP_STUB_HIT(0x00238A6Bu); g_esp += 4; /* 0x00238A6B: not detected */ }
 void sub_00238A95(void) { RECOMP_STUB_HIT(0x00238A95u); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x00238A95: pop esi; ret 12 */ }
 void sub_00238AC1(void) { RECOMP_STUB_HIT(0x00238AC1u); g_esp += 4; /* 0x00238AC1: not detected */ }
@@ -759,14 +725,8 @@ void sub_00239391(void) { RECOMP_STUB_HIT(0x00239391u); g_esp += 4; /* 0x0023939
 void sub_002393B3(void) { RECOMP_STUB_HIT(0x002393B3u); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 12; /* 0x002393B3: pop esi; ret 8 */ }
 void sub_002394CC(void) { RECOMP_STUB_HIT(0x002394CCu); g_esp += 4; /* 0x002394CC: not detected */ }
 void sub_00239534(void) { RECOMP_STUB_HIT(0x00239534u); g_esp += 8; /* 0x00239534: ret 4 */ }
-void sub_0023990C(void) { RECOMP_STUB_HIT(0x0023990Cu); g_esp += 4; /* 0x0023990C: not detected */ }
-void sub_00239979(void) { RECOMP_STUB_HIT(0x00239979u); g_edi = MEM32(g_esp); g_esp += 4; g_ebx = MEM32(g_esp); g_esp += 4; g_esp += 20; /* 0x00239979: pop edi; pop ebx; ret 16 */ }
 void sub_002399A8(void) { RECOMP_STUB_HIT(0x002399A8u); g_esp += 4; /* 0x002399A8: not detected */ }
 void sub_00239A0A(void) { RECOMP_STUB_HIT(0x00239A0Au); g_edi = MEM32(g_esp); g_esp += 4; g_ebx = MEM32(g_esp); g_esp += 4; g_esp += 20; /* 0x00239A0A: pop edi; pop ebx; ret 16 */ }
-void sub_00239A37(void) { RECOMP_STUB_HIT(0x00239A37u); g_esp += 4; /* 0x00239A37: not detected */ }
-void sub_00239A6A(void) { RECOMP_STUB_HIT(0x00239A6Au); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x00239A6A: pop esi; ret 12 */ }
-void sub_00239A96(void) { RECOMP_STUB_HIT(0x00239A96u); g_esp += 4; /* 0x00239A96: not detected */ }
-void sub_00239AC9(void) { RECOMP_STUB_HIT(0x00239AC9u); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x00239AC9: pop esi; ret 12 */ }
 void sub_00239AF8(void) { RECOMP_STUB_HIT(0x00239AF8u); g_esp += 4; /* 0x00239AF8: not detected */ }
 void sub_00239B55(void) { RECOMP_STUB_HIT(0x00239B55u); g_esi = MEM32(g_esp); g_esp += 4; g_ebp = MEM32(g_esp); g_esp += 4; g_esp += 36; /* 0x00239B55: pop esi; pop ebp; ret 32 */ }
 void sub_00239B85(void) { RECOMP_STUB_HIT(0x00239B85u); g_esp += 4; /* 0x00239B85: not detected */ }
@@ -775,10 +735,7 @@ void sub_00239BF8(void) { RECOMP_STUB_HIT(0x00239BF8u); g_esp += 4; /* 0x00239BF
 void sub_00239C3B(void) { RECOMP_STUB_HIT(0x00239C3Bu); g_esi = MEM32(g_esp); g_esp += 4; g_ebp = MEM32(g_esp); g_esp += 4; g_esp += 24; /* 0x00239C3B: pop esi; pop ebp; ret 20 */ }
 void sub_00239C6D(void) { RECOMP_STUB_HIT(0x00239C6Du); g_esp += 4; /* 0x00239C6D: not detected */ }
 void sub_00239D43(void) { RECOMP_STUB_HIT(0x00239D43u); g_edi = MEM32(g_esp); g_esp += 4; g_esi = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x00239D43: pop edi; pop esi; ret 12 */ }
-void sub_00239FF6(void) { RECOMP_STUB_HIT(0x00239FF6u); g_esp += 4; /* 0x00239FF6: not detected */ }
-void sub_0023A043(void) { RECOMP_STUB_HIT(0x0023A043u); g_esp += 8; /* 0x0023A043: ret 4 */ }
 void sub_0023A2A0(void) { RECOMP_STUB_HIT(0x0023A2A0u); g_esp += 20; /* 0x0023A2A0: ret 16 */ }
-void sub_0023A2EA(void) { RECOMP_STUB_HIT(0x0023A2EAu); g_esp += 16; /* 0x0023A2EA: ret 12 */ }
 void sub_0023B4C9(void) { RECOMP_STUB_HIT(0x0023B4C9u); g_esp += 4; /* 0x0023B4C9: not detected */ }
 void sub_00243AF0(void) { RECOMP_STUB_HIT(0x00243AF0u); g_esp += 12; /* 0x00243AF0: ret 8 */ }
 void sub_00243B04(void) { RECOMP_STUB_HIT(0x00243B04u); g_esp += 12; /* 0x00243B04: ret 8 */ }
@@ -879,9 +836,6 @@ void sub_0027519E(void) { RECOMP_STUB_HIT(0x0027519Eu); g_esp += 4; /* 0x0027519
 void sub_0027569B(void) { RECOMP_STUB_HIT(0x0027569Bu); g_esp += 4; /* 0x0027569B: not detected */ }
 void sub_0027572C(void) { RECOMP_STUB_HIT(0x0027572Cu); g_esp += 4; /* 0x0027572C: not detected */ }
 void sub_002757B0(void) { RECOMP_STUB_HIT(0x002757B0u); g_esp += 4; /* 0x002757B0: not detected */ }
-void sub_00285B70(void) { RECOMP_STUB_HIT(0x00285B70u); g_eax = 0; g_esp += 12; /* 0x00285B70: ret 8 */ }
-void sub_002869A1(void) { RECOMP_STUB_HIT(0x002869A1u); g_esp += 4; /* 0x002869A1: not detected */ }
-void sub_002869EF(void) { RECOMP_STUB_HIT(0x002869EFu); g_esi = MEM32(g_esp); g_esp += 4; g_ebp = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x002869EF: pop esi; pop ebp; ret 12 */ }
 void sub_00286EC2(void) { RECOMP_STUB_HIT(0x00286EC2u); g_esp += 4; /* 0x00286EC2: not detected */ }
 void sub_00286EE5(void) { RECOMP_STUB_HIT(0x00286EE5u); g_esp += 4; /* 0x00286EE5: not detected */ }
 void sub_00286F18(void) { RECOMP_STUB_HIT(0x00286F18u); g_esp += 20; /* 0x00286F18: ret 16 */ }

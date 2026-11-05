@@ -378,6 +378,7 @@ int main(int argc, char **argv)
     sa.sa_flags = SA_SIGINFO;
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGBUS, &sa, NULL);
+    sigaction(SIGFPE, &sa, NULL);
 
     return xbox_HostWindowMain(boot_and_run);
 #endif
