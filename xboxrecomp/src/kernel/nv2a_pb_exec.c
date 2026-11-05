@@ -2381,6 +2381,7 @@ typedef struct {
     float iw[3], uv[3][2], stc[3][4][4], vfog[3], fogc[4], inv_area;
     float *zb;
     int minx, maxx, miny, maxy, use_rc, textured;
+    int sx, sy;           /* sample stride: 2 skips the AA samples not shown */
 } XfTri;
 
 typedef struct { uint64_t depth_fail, pixels; uint32_t zpass; } XfCount;
@@ -2392,8 +2393,10 @@ static void xf_rows(const XfTri *T, int y0, int step, XfCount *cnt)
     const Nv2aVshOutput *va = T->va, *vb = T->vb, *vc = T->vc;
     int x, y, k;
 
+    int x0 = (T->minx + T->sx - 1) / T->sx * T->sx;
+
     for (y = y0; y < T->maxy; y += step) {
-        for (x = T->minx; x < T->maxx; x++) {
+        for (x = x0; x < T->maxx; x += T->sx) {
             float px = (float)x + 0.5f, py = (float)y + 0.5f;
             float w0 = (b[0] - a[0]) * (py - a[1]) - (b[1] - a[1]) * (px - a[0]);
             float w1 = (c[0] - b[0]) * (py - b[1]) - (c[1] - b[1]) * (px - b[0]);
@@ -2524,9 +2527,12 @@ static void xf_rows_owned(const XfTri *tris, int ntris, int k, int n,
                           XfCount *cnt)
 {
     int i;
+    /* Ownership is by sample row (y / sy), so skipped rows do not leave
+     * half the workers idle. */
     for (i = 0; i < ntris; i++) {
-        int y0 = tris[i].miny + ((k - tris[i].miny) % n + n) % n;
-        xf_rows(&tris[i], y0, n, cnt);
+        int sy = tris[i].sy, l = (tris[i].miny + sy - 1) / sy;
+        l += ((k - l) % n + n) % n;
+        xf_rows(&tris[i], l * sy, n * sy, cnt);
     }
 }
 
@@ -2573,7 +2579,8 @@ static void xf_rows_parallel(const XfTri *T, int ntris, long px,
 
     if (n <= 1 || px < NV_RASTER_MT_MIN_PIXELS) {
         for (k = 0; k < ntris; k++)
-            xf_rows(&T[k], T[k].miny, 1, total);
+            xf_rows(&T[k], (T[k].miny + T[k].sy - 1) / T[k].sy * T[k].sy,
+                    T[k].sy, total);
         return;
     }
     s_pool.tris = T;
@@ -2669,6 +2676,18 @@ static void raster_xf_triangle(const Nv2aVshOutput *va, const Nv2aVshOutput *vb,
     T.textured = s_gpu.texs[0].valid && !s_xf_no_tex;
     T.use_rc = s_gpu.rc_seen && !no_rc;
     T.va = va; T.vb = vb; T.vc = vc;
+    /* Shade only sample (0,0) of each anti-aliasing block: that is the one
+     * the window shows (fb_present*: every other pixel and row), so the
+     * other three were a 4x cost on a 2x2 surface for nothing seen.
+     * ponytail: a title that reads its AA surface back as a texture sees
+     * stale odd samples; RECOMP_AA_FULL=1 shades them all. */
+    {
+        static int full = -1;
+        if (full < 0)
+            full = getenv("RECOMP_AA_FULL") != NULL;
+        T.sx = !full && s_gpu.aa_sx > 1.5f ? 2 : 1;
+        T.sy = !full && s_gpu.aa_sy > 1.5f ? 2 : 1;
+    }
 
     v[0] = va; v[1] = vb; v[2] = vc;
     a = va->pos; b = vb->pos; c = vc->pos;
