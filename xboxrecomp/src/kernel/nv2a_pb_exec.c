@@ -2490,7 +2490,24 @@ static void xf_rows(const XfTri *T, int y0, int step, XfCount *cnt)
 #define NV_RASTER_MAX_THREADS 16
 #define NV_RASTER_MT_MIN_PIXELS 8192
 
+/* Every call below has a POSIX shim (platform/win32_compat), so the pool runs
+ * on both hosts; only the CPU count is asked differently. It was Windows-only,
+ * which left Linux rasterising every full-screen pass on one thread. */
+#if !defined(_WIN32)
+#include <unistd.h>
+#endif
+static int host_cpu_count(void)
+{
 #if defined(_WIN32)
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (int)si.dwNumberOfProcessors;
+#else
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    return n > 0 ? (int)n : 1;
+#endif
+}
+
 static struct {
     int n;                                  /* threads incl. the caller */
     HANDLE start[NV_RASTER_MAX_THREADS], done;
@@ -2531,11 +2548,9 @@ static int raster_pool_size(void)
     static int init;
     if (!init) {
         const char *e = getenv("RECOMP_RASTER_THREADS");
-        SYSTEM_INFO si;
         int n, k;
         init = 1;
-        GetSystemInfo(&si);
-        n = e ? atoi(e) : (int)si.dwNumberOfProcessors - 4;
+        n = e ? atoi(e) : host_cpu_count() - 4;
         if (n < 1) n = 1;
         if (n > NV_RASTER_MAX_THREADS) n = NV_RASTER_MAX_THREADS;
         s_pool.n = n;
@@ -2580,16 +2595,6 @@ static void xf_rows_parallel(const XfTri *T, int ntris, long px,
         total->zpass += s_pool.cnt[k].zpass;
     }
 }
-#else
-static void xf_rows_parallel(const XfTri *T, int ntris, long px,
-                             XfCount *total)
-{
-    int k;
-    (void)px;
-    for (k = 0; k < ntris; k++)
-        xf_rows(&T[k], T[k].miny, 1, total);
-}
-#endif
 
 /* Triangles waiting for the end of their batch.
  *
@@ -2908,8 +2913,11 @@ static int transform_vertex(uint32_t index, Nv2aVshOutput *out)
      * are already surface units. The hardware draws such a vertex (xemu
      * clamps w away from zero, in front of the eye), but raster_xf_clipped
      * would count it behind the eye. w = 1 draws it at the same place and
-     * keeps 1/w finite. -0 stays behind the eye and is clipped, as on xemu. */
-    if (out->pos[3] == 0.0f && !signbit(out->pos[3]))
+     * keeps 1/w finite. -0 stays behind the eye and is clipped, as on xemu.
+     * w = inf is the same case from the other side: D3D's XYZRHW program
+     * writes oPos.w = 1/rhw, and a pre-transformed vertex with rhw 0
+     * (Crimson Skies' Bink movie quad) gives inf. xemu sets it to 1 too. */
+    if ((out->pos[3] == 0.0f && !signbit(out->pos[3])) || isinf(out->pos[3]))
         out->pos[3] = 1.0f;
     /* The program's viewport is in logical pixels; the surface may be larger
      * (anti-aliasing). */
@@ -3980,6 +3988,18 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
                         (unsigned)s_gpu.imm_count, (unsigned)s_gpu.inline_count,
                         (unsigned)s_gpu.idx_count, (unsigned)s_gpu.xf_mode,
                         s_gpu.composite_set, 10);
+            if (s_ftrace == 2 && s_gpu.inline_count) {
+                uint32_t w, a;
+                fprintf(stderr, "[FTRACE]   inline:");
+                for (w = 0; w < s_gpu.inline_count && w < 32; w++)
+                    fprintf(stderr, " %08X", s_gpu.inline_buf[w]);
+                fprintf(stderr, "%c[FTRACE]   formats:", 10);
+                for (a = 0; a < 16; a++)
+                    if (s_gpu.attr[a].size)
+                        fprintf(stderr, " v%u:%u/%u", a, s_gpu.attr[a].type,
+                                s_gpu.attr[a].size);
+                fprintf(stderr, "%c", 10);
+            }
             if (s_gpu.imm_count)
                 draw_immediate();
             else if (s_gpu.inline_count)
