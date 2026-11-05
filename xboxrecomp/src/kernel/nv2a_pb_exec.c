@@ -3974,6 +3974,12 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
             /* Three ways a batch can have arrived, and only one is in use at
              * a time: vertices completed by SET_VERTEX4F, a payload written
              * with INLINE_ARRAY, or indices into the title's own arrays. */
+            if (s_ftrace == 2)
+                fprintf(stderr, "[FTRACE] end prim %u: imm %u inline %u idx %u"
+                        " xf_mode %u composite %d%c", s_gpu.prim,
+                        (unsigned)s_gpu.imm_count, (unsigned)s_gpu.inline_count,
+                        (unsigned)s_gpu.idx_count, (unsigned)s_gpu.xf_mode,
+                        s_gpu.composite_set, 10);
             if (s_gpu.imm_count)
                 draw_immediate();
             else if (s_gpu.inline_count)
