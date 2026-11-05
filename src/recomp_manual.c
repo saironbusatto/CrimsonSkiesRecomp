@@ -564,6 +564,16 @@ void recomp_icall_not_code_log(uint32_t va)
                     "(called from ret=0x%08X, esp=0x%08X, at call #%llu)\n",
             va, (unsigned long long)hits[i],
             ret_va, g_esp, (unsigned long long)g_icall_count);
+    if (g_xbox_mem_offset) {
+        uint32_t n;
+        fprintf(stderr, "  ctx: eax=0x%08X ecx=0x%08X edx=0x%08X ebx=0x%08X esi=0x%08X edi=0x%08X ebp=0x%08X\n",
+                g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi, g_seh_ebp);
+        for (n = 0; n < 0x40; n += 8) {
+            fprintf(stderr, "  stk %08X: %08X %08X %08X %08X  %08X %08X %08X %08X\n", g_esp + n * 4,
+                    MEM32(g_esp + n * 4), MEM32(g_esp + n * 4 + 4), MEM32(g_esp + n * 4 + 8), MEM32(g_esp + n * 4 + 12),
+                    MEM32(g_esp + n * 4 + 16), MEM32(g_esp + n * 4 + 20), MEM32(g_esp + n * 4 + 24), MEM32(g_esp + n * 4 + 28));
+        }
+    }
     fflush(stderr);
 }
 
