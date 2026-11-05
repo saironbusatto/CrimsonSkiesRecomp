@@ -656,10 +656,16 @@ static LONG CALLBACK ac97_write_veh(PEXCEPTION_POINTERS ep)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
-#if !defined(_WIN32) && defined(__aarch64__)
+#if !defined(_WIN32) && (defined(__aarch64__) || defined(__x86_64__))
+#if defined(__aarch64__)
 #include "../platform/mmio_decode_a64.h"
+#define AC97_POSIX_EMULATE mmio_emulate_a64
+#else
+#include "../platform/mmio_decode.h"
+#define AC97_POSIX_EMULATE mmio_emulate
+#endif
 #include <sys/mman.h>
-static size_t g_ac97_hsize;    /* host page: 16 KB on arm64 Darwin */
+static size_t g_ac97_hsize;    /* host page: 16 KB on arm64 Darwin, 4 KB on x86-64 */
 
 static uint64_t ac97_posix_rd(void *dev, uint32_t off, int size)
 {
@@ -705,7 +711,7 @@ int xbox_Ac97PosixFault(void *ucv, uintptr_t fault)
         __atomic_store_n(&g_ac97_posix_lock, 0, __ATOMIC_RELEASE);
         return 0;
     }
-    ok = mmio_emulate_a64((ucontext_t *)ucv, (uint32_t)(fault - (uintptr_t)g_ac97_page),
+    ok = AC97_POSIX_EMULATE((ucontext_t *)ucv, (uint32_t)(fault - (uintptr_t)g_ac97_page),
                           g_ac97_page, ac97_posix_rd, ac97_posix_wr);
     if (ok)
         ac97_clear_reset_bits();
@@ -724,7 +730,7 @@ static void ac97_arm_write_trap(void)
 
     if (!g_mcpx_memory || g_ac97_page)
         return;
-#if !defined(_WIN32) && !defined(__aarch64__)
+#if !defined(_WIN32) && !defined(__aarch64__) && !defined(__x86_64__)
     /* No POSIX decoder for this host's stores: a trapped write would be a
      * fault nothing services. Leave the page writable. */
     (void)old;
@@ -733,7 +739,7 @@ static void ac97_arm_write_trap(void)
     return;
 #endif
     g_ac97_page = (char *)g_mcpx_memory + AC97_NABM_OFFSET;
-#if !defined(_WIN32) && defined(__aarch64__)
+#if !defined(_WIN32) && (defined(__aarch64__) || defined(__x86_64__))
     (void)old;
     g_ac97_hsize = (size_t)sysconf(_SC_PAGESIZE);
     if (g_ac97_hsize < AC97_TRAP_BYTES)
@@ -831,19 +837,18 @@ int xbox_VehMmioFault(void *exception_pointers)
     return 0;
 }
 #else
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__x86_64__)
 extern bool apu_hook_handle_mmio_posix(void *ucv, uintptr_t fault_addr,
                                        uint32_t fault_xbox_va, int is_write);
 #endif
 
 /* POSIX: call from the title's SIGBUS/SIGSEGV handler (SA_SIGINFO) with its
  * ucontext_t * and si_addr; on 1, return from the handler and the thread
- * resumes after the emulated instruction. APU, then AC'97, then OHCI. Only
- * arm64 hosts have a decoder; elsewhere nothing is trapped and this returns
- * 0. */
+ * resumes after the emulated instruction. APU, then AC'97, then OHCI. The
+ * APU and AC'97 are decoded on arm64 and x86-64; OHCI only on arm64. */
 int xbox_PosixMmioFault(void *ucv, uintptr_t fault)
 {
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__x86_64__)
     uint32_t va;
 
     if (!mmio_fault_va(fault, &va))
@@ -854,6 +859,8 @@ int xbox_PosixMmioFault(void *ucv, uintptr_t fault)
             && apu_hook_handle_mmio_posix(ucv, fault, va, 0);
     if (xbox_Ac97PosixFault(ucv, fault))
         return 1;
+#endif
+#if defined(__aarch64__)
     if (xbox_OhciOwnsAddress(va))
         return xbox_OhciHandleMmio(ucv, va);
 #else
@@ -3885,7 +3892,13 @@ static uint32_t heap_carve_free(uint32_t size, uint32_t alignment)
 uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 
 #define XBOX_THREAD_STACK_SIZE  (512 * 1024)
-#define XBOX_MAX_THREAD_STACKS  8
+/* Crimson Skies keeps 17+ workers alive after init (one per stream, each
+ * started with a two-event handshake); at 8 the ninth ran inline on its
+ * creator and blocked it in the worker's wait loop forever. The heap failing
+ * is the real limit -- xbox_HeapAlloc returning 0 takes the same path.
+ * ponytail: fixed 512 KB per worker, honour KernelStackSize if 64 x 512 KB
+ * ever crowds the heap. */
+#define XBOX_MAX_THREAD_STACKS  64
 
 static int g_thread_stacks_used = 0;
 
