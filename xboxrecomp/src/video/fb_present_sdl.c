@@ -94,9 +94,10 @@ void xbox_FramebufferWindowSet(uint32_t fb_va, uint32_t pitch)
         s_fb_pitch = pitch;
 }
 
-/* ponytail: the SDL window shows the surface unscaled; 2x2 anti-aliased
- * surfaces (#162) come through at twice the height until it honours this. */
-void xbox_FramebufferWindowSetAA(uint32_t sy) { (void)sy; }
+/* Vertical anti-aliasing factor of the surface: 2 for 2x2 (twice the rows
+ * as well as the columns), 1 otherwise. Only the executor knows it. */
+static volatile uint32_t s_aa_sy = 1;
+void xbox_FramebufferWindowSetAA(uint32_t sy) { s_aa_sy = sy ? sy : 1; }
 
 /* The window is opened by xbox_HostWindowMain, on the main thread. */
 void xbox_FramebufferWindowStart(void) {}
@@ -134,9 +135,11 @@ static void present_copy(uint32_t fb_va, uint32_t pitch)
     uint32_t bpp = pitch / FB_W, y;
     size_t need;
 
-    if (bpp != 2 && bpp != 4)
+    /* 8: a 2x-wide anti-aliased 32-bit surface, shown as every other pixel
+     * (and every other row for 2x2), as fb_present.c does. */
+    if (bpp != 2 && bpp != 4 && bpp != 8)
         return;
-    need = (size_t)FB_W * FB_H * bpp;
+    need = (size_t)FB_W * FB_H * (bpp == 8 ? 4 : bpp);
     if (s->cap < need) {
         uint8_t *n = (uint8_t *)realloc(s->px, need);
         if (!n)
@@ -145,6 +148,17 @@ static void present_copy(uint32_t fb_va, uint32_t pitch)
         s->cap = need;
     }
     src = (const uint8_t *)((uintptr_t)fb_va + xbox_GetMemoryOffset());
+    if (bpp == 8) {
+        uint32_t sy = s_aa_sy, x;
+        for (y = 0; y < FB_H; y++) {
+            const uint32_t *p = (const uint32_t *)(src + (size_t)y * pitch * sy);
+            uint32_t *d = (uint32_t *)s->px + (size_t)y * FB_W;
+            for (x = 0; x < FB_W; x++)
+                d[x] = p[x * 2];
+        }
+        publish(4);
+        return;
+    }
     for (y = 0; y < FB_H; y++)
         memcpy(s->px + (size_t)y * FB_W * bpp, src + (size_t)y * pitch,
                (size_t)FB_W * bpp);

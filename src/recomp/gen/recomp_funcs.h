@@ -12507,3 +12507,4 @@ void sub_00289AE0(void);
 void sub_00289D7B(void);
 void sub_002881CD(void);
 void sub_00289B56(void);
+void sub_00289A56(void);

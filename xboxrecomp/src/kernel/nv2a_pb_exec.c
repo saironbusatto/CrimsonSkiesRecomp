@@ -4474,7 +4474,11 @@ void nv2a_pb_exec_report(void)
         /* Frames per second of guest time, from flips between reports. */
         static uint32_t last_flips;
         static unsigned long last_ms;
-        unsigned long now = (unsigned long)(clock() * 1000.0 / CLOCKS_PER_SEC);
+        /* Wall time: clock() is CPU time summed over the raster threads. */
+        struct timespec ts;
+        timespec_get(&ts, TIME_UTC);
+        unsigned long now = (unsigned long)ts.tv_sec * 1000ul
+                          + (unsigned long)(ts.tv_nsec / 1000000);
         if (last_ms && now > last_ms)
             fprintf(stderr, "[GPU] %.2f fps (%u flips)%c",
                     (s_gpu.flips - last_flips) * 1000.0 / (now - last_ms),
