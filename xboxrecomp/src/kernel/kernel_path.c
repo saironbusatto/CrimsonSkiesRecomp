@@ -669,6 +669,59 @@ translate:
 
 #include <unistd.h>
 #include <stdlib.h>
+#include <dirent.h>
+#include <strings.h>
+#include <sys/stat.h>
+
+/* Xbox file systems ignore case and titles rely on it: Crimson Skies opens
+ * d:\bink1\attractmode.bik, which ships as bink1/AttractMode.bik. Below
+ * `root`, each component that does not exist as spelled is replaced by the
+ * directory entry that matches it ignoring case. One stat per component on a
+ * hit; a directory is read only on a miss. A component with no match (a file
+ * about to be created) and everything after it are left as they are. */
+static void fold_case(char *path, size_t root)
+{
+    char *p = path + root;
+    struct stat st;
+
+    for (;;) {
+        char *end;
+        while (*p == '/')
+            p++;
+        if (!*p || p == path)
+            return;
+        end = strchr(p, '/');
+        if (end)
+            *end = '\0';
+        if (stat(path, &st) != 0) {
+            DIR *d;
+            struct dirent *e;
+            int found = 0;
+
+            p[-1] = '\0';                 /* the parent, for opendir */
+            d = opendir(path[0] ? path : "/");
+            p[-1] = '/';
+            if (d) {
+                while ((e = readdir(d)) != NULL)
+                    if (strcasecmp(e->d_name, p) == 0) {
+                        memcpy(p, e->d_name, strlen(p));
+                        found = 1;
+                        break;
+                    }
+                closedir(d);
+            }
+            if (!found) {
+                if (end)
+                    *end = '/';
+                return;
+            }
+        }
+        if (!end)
+            return;
+        *end = '/';
+        p = end + 1;
+    }
+}
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
@@ -893,6 +946,7 @@ translate:
             while (n > 1 && host_path_buf[n - 1] == '/')
                 host_path_buf[--n] = '\0';
         }
+        fold_case(host_path_buf, strlen(base_dir));
 
         XBOX_TRACE(XBOX_LOG_PATH, "%s -> %s", xbox_path, host_path_buf);
         /* As the Win32 backend does: the bridge reads back the host path

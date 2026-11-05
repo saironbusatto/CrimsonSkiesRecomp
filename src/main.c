@@ -201,11 +201,15 @@ static void posix_fault_handler(int sig, siginfo_t *si, void *uc)
         return;
 
     fprintf(stderr, "\n[CRASH] Signal %d (%s) at address %p\n",
-            sig, sig == SIGSEGV ? "SIGSEGV" : "SIGBUS", si->si_addr);
+            sig, sig == SIGSEGV ? "SIGSEGV" : sig == SIGFPE ? "SIGFPE" : "SIGBUS",
+            si->si_addr);
     fprintf(stderr, "  Xbox regs: eax=0x%08X ecx=0x%08X edx=0x%08X esp=0x%08X\n",
             g_eax, g_ecx, g_edx, g_esp);
     fprintf(stderr, "  Xbox regs: ebx=0x%08X esi=0x%08X edi=0x%08X\n",
             g_ebx, g_esi, g_edi);
+    if (g_xbox_mem_offset)
+        fprintf(stderr, "  Xbox fs base: 0x%08X fs:[4]=0x%08X\n",
+                g_fs_base, g_fs_base ? MEM32(g_fs_base + 4) : 0);
     if (g_xbox_mem_offset && si->si_addr) {
         fprintf(stderr, "  Xbox VA of fault: 0x%08X\n",
                 (uint32_t)((uintptr_t)si->si_addr - (uintptr_t)g_xbox_mem_offset));

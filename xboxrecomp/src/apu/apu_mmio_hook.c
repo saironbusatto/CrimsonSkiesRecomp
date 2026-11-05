@@ -7,6 +7,9 @@
  * APU register handlers.
  */
 
+#if !defined(_WIN32) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE   /* REG_* in <ucontext.h>, for mmio_decode.h */
+#endif
 #include "apu.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -120,12 +123,19 @@ bool apu_hook_handle_mmio(PCONTEXT ctx, uintptr_t fault_addr,
 
 #endif /* _WIN32 */
 
-#if !defined(_WIN32) && defined(__aarch64__)
-/* POSIX arm64: the same hook over sigaction + ucontext, with the A64 decoder
- * (src/platform/mmio_decode_a64.h). The host's fault handler reaches it
+#if !defined(_WIN32) && (defined(__aarch64__) || defined(__x86_64__))
+/* POSIX: the same hook over sigaction + ucontext, with the A64 decoder
+ * (src/platform/mmio_decode_a64.h) on arm64 and the x86-64 one shared with
+ * Windows (src/platform/mmio_decode.h) on x86-64. The host's fault handler reaches it
  * through xbox_PosixMmioFault before it reports a crash. */
 #include <signal.h>
+#if defined(__aarch64__)
 #include "../platform/mmio_decode_a64.h"
+#define APU_POSIX_EMULATE mmio_emulate_a64
+#else
+#include "../platform/mmio_decode.h"
+#define APU_POSIX_EMULATE mmio_emulate
+#endif
 
 #define APU_MMIO_BASE  0xFE800000u
 #define APU_MMIO_SIZE  0x00080000u
@@ -167,16 +177,21 @@ bool apu_hook_handle_mmio_posix(void *ucv, uintptr_t fault_addr,
     (void)fault_addr; (void)is_write;
     if (!g_apu_state || off >= APU_MMIO_SIZE)
         return false;
-    if (mmio_emulate_a64(uc, off, g_apu_state, apu_mmio_rd, apu_mmio_wr))
+    if (APU_POSIX_EMULATE(uc, off, g_apu_state, apu_mmio_rd, apu_mmio_wr))
         return true;
     g_apu_mmio_decode_fail++;
     /* stdio in a signal handler is not async-signal-safe. The process is
      * about to die of this fault anyway, and the line is what says why;
      * capped at 20, as on Windows. */
-    if (g_apu_mmio_decode_fail <= 20)
+    if (g_apu_mmio_decode_fail <= 20) {
+#if defined(__aarch64__)
+        uintptr_t pc = (uintptr_t)A64_CTX_PC(uc);
+#else
+        uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+#endif
         fprintf(stderr, "[APU] MMIO decode fail at PC=%p insn=%08X offset=0x%X\n",
-                (void *)(uintptr_t)A64_CTX_PC(uc),
-                *(const uint32_t *)(uintptr_t)A64_CTX_PC(uc), off);
+                (void *)pc, *(const uint32_t *)pc, off);
+    }
     return false;
 }
 #endif
