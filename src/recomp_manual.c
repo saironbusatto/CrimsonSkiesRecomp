@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stddef.h>   /* ptrdiff_t */
 #include <string.h>
+#include <stdlib.h>
 #include "recomp/gen/recomp_types.h"
 
 typedef struct XBOX_GAMEPAD {
@@ -81,14 +82,6 @@ extern void sub_00206430(void);
 extern void sub_002064D0(void);
 extern void sub_002066B0(void);
 extern void sub_00040830(void);
-
-static void manual_sub_00206640(void)
-{
-    /* Direct3D_CheckDeviceFormat(Adapter, DeviceType, AdapterFormat, Usage, RType, CheckFormat)
-     * Stdcall: 6 arguments (24 bytes) popped by callee + 4 ret addr. Returns D3D_OK (0). */
-    g_eax = 0;
-    g_esp += 28;
-}
 
 static void manual_sub_00285B70(void)
 {
@@ -178,30 +171,6 @@ static void manual_sub_00214A82(void)
 {
     g_eax = 0;
     g_esp += 20;
-}
-
-static void manual_sub_002040E0(void)
-{
-    /* Direct3D_Clear(Count, pRects, Flags, Color, Z, Stencil)
-     * Stdcall: 6 arguments (24 bytes) + 4 ret addr. Returns D3D_OK (0). */
-    g_eax = 0;
-    g_esp += 28;
-}
-
-static void manual_sub_002041B5(void)
-{
-    g_eax = 0;
-    g_esp += 28;
-}
-
-static void manual_sub_002024A0(void)
-{
-    g_esp += 4;
-}
-
-static void manual_sub_0020258D(void)
-{
-    g_esp += 4;
 }
 
 static void manual_hook_sub_00040830(void)
@@ -331,6 +300,22 @@ static void manual_sub_00286F28(void)
     XBOX_INPUT_STATE st;
     memset(&st, 0, sizeof(st));
     uint32_t err = xbox_InputGetState(0, &st);
+    /* RECOMP_PAD_SCRIPT drives the USB pad's reports; read the report here
+     * too, so a scripted run reaches the title through this stand-in. */
+    if (getenv("RECOMP_PAD_SCRIPT")) {
+        extern int usb_gamepad_report(int pad, uint8_t *out, int max);
+        static uint8_t last[20];
+        static uint32_t packet;
+        uint8_t r[20];
+        if (usb_gamepad_report(0, r, (int)sizeof r) == 20) {
+            if (memcmp(r, last, sizeof r)) { memcpy(last, r, sizeof r); packet++; }
+            st.dwPacketNumber = packet;
+            st.Gamepad.wButtons = (uint16_t)(r[2] | r[3] << 8);
+            memcpy(st.Gamepad.bAnalogButtons, &r[4], 8);
+            memcpy(&st.Gamepad.sThumbLX, &r[12], 8);
+            err = 0;
+        }
+    }
     if (err == 0) {
         memcpy((void *)((uintptr_t)g_xbox_mem_offset + pState), &st, sizeof(st));
         g_eax = 0;
@@ -341,119 +326,11 @@ static void manual_sub_00286F28(void)
     g_esp += 12;
 }
 
-static void manual_sub_00201910(void)
-{
-    /* FVF vertex format parser
-     * Stdcall: 2 args: [esp+4] = pFormatStruct (e.g. 0x213258), [esp+8] = fvf (e.g. ebx)
-     * Callee pops 8 bytes + 4 ret addr = 12 bytes.
-     */
-    uint32_t eax = MEM32(g_esp + 4);
-    uint32_t ebx = MEM32(g_esp + 8);
-    uint32_t edi = eax + 0x1C;
-    MEM32(eax + 4) = 0;
-    MEM32(eax + 0x10) = 0;
-    uint32_t edx = edi;
-    for (int i = 0; i < 16; i++) {
-        MEM32(edx) = 2;
-        edx += 0x10;
-    }
-    uint32_t esi = ebx & 0xE;
-    edx = 0;
-    if (esi == 4) {
-        MEM32(eax + 4) |= 2;
-        MEM32(edi) = 0x42;
-        edx = 0x10;
-    } else if (esi != 0) {
-        MEM32(edi) = 0x32;
-        edx = 0xC;
-        if (esi >= 6) {
-            uint32_t count = ((esi - 6) >> 1) + 1;
-            uint32_t ecx = (count << 4) | 2;
-            MEM32(eax + 0x28) = 0xC;
-            MEM32(eax + 0x2C) = ecx;
-            edx = count * 4 + 0xC;
-        }
-    }
-    if (ebx & 0x10) {
-        MEM32(eax + 0x38) = edx;
-        MEM32(eax + 0x3C) = 0x32;
-        edx += 0xC;
-    }
-    if (ebx & 0x40) {
-        MEM32(eax + 4) |= 0x400;
-        MEM32(eax + 0x48) = edx;
-        MEM32(eax + 0x4C) = 0x40;
-        edx += 4;
-    }
-    if (ebx & 0x80) {
-        MEM32(eax + 4) |= 0x800;
-        MEM32(eax + 0x58) = edx;
-        MEM32(eax + 0x5C) = 0x40;
-        edx += 4;
-    }
-    uint32_t num_tex = (ebx >> 8) & 0xF;
-    uint32_t tex_coords = ebx >> 16;
-    if (num_tex > 0) {
-        uint32_t ecx_shift = 0;
-        edi = eax + 0xAC;
-        for (uint32_t t = 0; t < num_tex; t++) {
-            uint32_t coord_type = tex_coords & 3;
-            uint32_t size = (coord_type < 4) ? MEM32(0x20EAC8 + coord_type * 4) : 2;
-            uint32_t val = (size << 4) | 2;
-            MEM32(edi) = val;
-            MEM32(edi - 4) = edx;
-            uint32_t ebp_val = MEM32(eax + 0x10);
-            ebp_val |= (size << ecx_shift);
-            MEM32(eax + 0x10) = ebp_val;
-            edx += size * 4;
-            tex_coords >>= 2;
-            edi += 0x10;
-            ecx_shift += 8;
-        }
-    }
-    g_esp += 12;
-}
-
-static void manual_sub_00202590(void)
-{
-    /* Direct3DDevice_SetVertexShader(Handle)
-     * Stdcall: 1 arg at [esp+4] + 4 ret addr. Total = 8.
-     */
-    uint32_t handle = MEM32(g_esp + 4);
-    uint32_t dev = MEM32(0x210BE8);
-    if (!dev) {
-        g_esp += 8;
-        return;
-    }
-
-    if (!(handle & 1)) {
-        /* FVF path: parse into 0x213258 */
-        uint32_t saved_esp = g_esp;
-        PUSH32(g_esp, handle);
-        PUSH32(g_esp, 0x213258);
-        PUSH32(g_esp, 0); /* dummy ret addr */
-        manual_sub_00201910();
-        g_esp = saved_esp;
-
-        MEM32(0x210748) |= 0x70;
-        MEM32(dev + 0x790) = 0x213258;
-        MEM32(dev + 0x794) = handle;
-        MEM32(dev + 0x798) = 0;
-    } else {
-        /* Programmable vertex shader object */
-        MEM32(dev + 0x790) = handle - 1;
-        MEM32(dev + 0x794) = handle;
-        MEM32(dev + 0x798) = 0;
-    }
-    g_esp += 8;
-}
-
 recomp_func_t recomp_lookup_manual(uint32_t xbox_va)
 {
     if (xbox_va == 0x00206430u) return sub_00206430;
     if (xbox_va == 0x002064D0u) return sub_002064D0;
     if (xbox_va == 0x002066B0u) return sub_002066B0;
-    if (xbox_va == 0x00206640u) return manual_sub_00206640;
     if (xbox_va == 0x00285B70u) return manual_sub_00285B70;
     if (xbox_va == 0x00214A3Du) return manual_sub_00214A3D;
     if (xbox_va == 0x00214A66u) return manual_sub_00214A66;
@@ -464,10 +341,6 @@ recomp_func_t recomp_lookup_manual(uint32_t xbox_va)
     if (xbox_va == 0x00214954u) return manual_sub_00214954;
     if (xbox_va == 0x002149C3u) return manual_sub_002149C3;
     if (xbox_va == 0x00214A82u) return manual_sub_00214A82;
-    if (xbox_va == 0x002040E0u) return manual_sub_002040E0;
-    if (xbox_va == 0x002041B5u) return manual_sub_002041B5;
-    if (xbox_va == 0x002024A0u) return manual_sub_002024A0;
-    if (xbox_va == 0x0020258Du) return manual_sub_0020258D;
     if (xbox_va == 0x00040830u) return manual_hook_sub_00040830;
 
     /* Missing static initializers in _initterm */
@@ -484,8 +357,6 @@ recomp_func_t recomp_lookup_manual(uint32_t xbox_va)
     if (xbox_va == 0x00286F28u) return manual_sub_00286F28;
 
     /* FVF parser and SetVertexShader */
-    if (xbox_va == 0x00201910u) return manual_sub_00201910;
-    if (xbox_va == 0x00202590u) return manual_sub_00202590;
 
     (void)xbox_va;
     return (recomp_func_t)0;

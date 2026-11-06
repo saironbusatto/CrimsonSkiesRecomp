@@ -2381,6 +2381,7 @@ typedef struct {
     float iw[3], uv[3][2], stc[3][4][4], vfog[3], fogc[4], inv_area;
     float *zb;
     int minx, maxx, miny, maxy, use_rc, textured;
+    int sx, sy;           /* sample stride: 2 skips the AA samples not shown */
 } XfTri;
 
 typedef struct { uint64_t depth_fail, pixels; uint32_t zpass; } XfCount;
@@ -2392,8 +2393,10 @@ static void xf_rows(const XfTri *T, int y0, int step, XfCount *cnt)
     const Nv2aVshOutput *va = T->va, *vb = T->vb, *vc = T->vc;
     int x, y, k;
 
+    int x0 = (T->minx + T->sx - 1) / T->sx * T->sx;
+
     for (y = y0; y < T->maxy; y += step) {
-        for (x = T->minx; x < T->maxx; x++) {
+        for (x = x0; x < T->maxx; x += T->sx) {
             float px = (float)x + 0.5f, py = (float)y + 0.5f;
             float w0 = (b[0] - a[0]) * (py - a[1]) - (b[1] - a[1]) * (px - a[0]);
             float w1 = (c[0] - b[0]) * (py - b[1]) - (c[1] - b[1]) * (px - b[0]);
@@ -2490,7 +2493,24 @@ static void xf_rows(const XfTri *T, int y0, int step, XfCount *cnt)
 #define NV_RASTER_MAX_THREADS 16
 #define NV_RASTER_MT_MIN_PIXELS 8192
 
+/* Every call below has a POSIX shim (platform/win32_compat), so the pool runs
+ * on both hosts; only the CPU count is asked differently. It was Windows-only,
+ * which left Linux rasterising every full-screen pass on one thread. */
+#if !defined(_WIN32)
+#include <unistd.h>
+#endif
+static int host_cpu_count(void)
+{
 #if defined(_WIN32)
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (int)si.dwNumberOfProcessors;
+#else
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    return n > 0 ? (int)n : 1;
+#endif
+}
+
 static struct {
     int n;                                  /* threads incl. the caller */
     HANDLE start[NV_RASTER_MAX_THREADS], done;
@@ -2507,9 +2527,12 @@ static void xf_rows_owned(const XfTri *tris, int ntris, int k, int n,
                           XfCount *cnt)
 {
     int i;
+    /* Ownership is by sample row (y / sy), so skipped rows do not leave
+     * half the workers idle. */
     for (i = 0; i < ntris; i++) {
-        int y0 = tris[i].miny + ((k - tris[i].miny) % n + n) % n;
-        xf_rows(&tris[i], y0, n, cnt);
+        int sy = tris[i].sy, l = (tris[i].miny + sy - 1) / sy;
+        l += ((k - l) % n + n) % n;
+        xf_rows(&tris[i], l * sy, n * sy, cnt);
     }
 }
 
@@ -2531,11 +2554,9 @@ static int raster_pool_size(void)
     static int init;
     if (!init) {
         const char *e = getenv("RECOMP_RASTER_THREADS");
-        SYSTEM_INFO si;
         int n, k;
         init = 1;
-        GetSystemInfo(&si);
-        n = e ? atoi(e) : (int)si.dwNumberOfProcessors - 4;
+        n = e ? atoi(e) : host_cpu_count() - 4;
         if (n < 1) n = 1;
         if (n > NV_RASTER_MAX_THREADS) n = NV_RASTER_MAX_THREADS;
         s_pool.n = n;
@@ -2558,7 +2579,8 @@ static void xf_rows_parallel(const XfTri *T, int ntris, long px,
 
     if (n <= 1 || px < NV_RASTER_MT_MIN_PIXELS) {
         for (k = 0; k < ntris; k++)
-            xf_rows(&T[k], T[k].miny, 1, total);
+            xf_rows(&T[k], (T[k].miny + T[k].sy - 1) / T[k].sy * T[k].sy,
+                    T[k].sy, total);
         return;
     }
     s_pool.tris = T;
@@ -2580,16 +2602,6 @@ static void xf_rows_parallel(const XfTri *T, int ntris, long px,
         total->zpass += s_pool.cnt[k].zpass;
     }
 }
-#else
-static void xf_rows_parallel(const XfTri *T, int ntris, long px,
-                             XfCount *total)
-{
-    int k;
-    (void)px;
-    for (k = 0; k < ntris; k++)
-        xf_rows(&T[k], T[k].miny, 1, total);
-}
-#endif
 
 /* Triangles waiting for the end of their batch.
  *
@@ -2664,6 +2676,18 @@ static void raster_xf_triangle(const Nv2aVshOutput *va, const Nv2aVshOutput *vb,
     T.textured = s_gpu.texs[0].valid && !s_xf_no_tex;
     T.use_rc = s_gpu.rc_seen && !no_rc;
     T.va = va; T.vb = vb; T.vc = vc;
+    /* Shade only sample (0,0) of each anti-aliasing block: that is the one
+     * the window shows (fb_present*: every other pixel and row), so the
+     * other three were a 4x cost on a 2x2 surface for nothing seen.
+     * ponytail: a title that reads its AA surface back as a texture sees
+     * stale odd samples; RECOMP_AA_FULL=1 shades them all. */
+    {
+        static int full = -1;
+        if (full < 0)
+            full = getenv("RECOMP_AA_FULL") != NULL;
+        T.sx = !full && s_gpu.aa_sx > 1.5f ? 2 : 1;
+        T.sy = !full && s_gpu.aa_sy > 1.5f ? 2 : 1;
+    }
 
     v[0] = va; v[1] = vb; v[2] = vc;
     a = va->pos; b = vb->pos; c = vc->pos;
@@ -2908,8 +2932,11 @@ static int transform_vertex(uint32_t index, Nv2aVshOutput *out)
      * are already surface units. The hardware draws such a vertex (xemu
      * clamps w away from zero, in front of the eye), but raster_xf_clipped
      * would count it behind the eye. w = 1 draws it at the same place and
-     * keeps 1/w finite. -0 stays behind the eye and is clipped, as on xemu. */
-    if (out->pos[3] == 0.0f && !signbit(out->pos[3]))
+     * keeps 1/w finite. -0 stays behind the eye and is clipped, as on xemu.
+     * w = inf is the same case from the other side: D3D's XYZRHW program
+     * writes oPos.w = 1/rhw, and a pre-transformed vertex with rhw 0
+     * (Crimson Skies' Bink movie quad) gives inf. xemu sets it to 1 too. */
+    if ((out->pos[3] == 0.0f && !signbit(out->pos[3])) || isinf(out->pos[3]))
         out->pos[3] = 1.0f;
     /* The program's viewport is in logical pixels; the surface may be larger
      * (anti-aliasing). */
@@ -3974,6 +4001,24 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
             /* Three ways a batch can have arrived, and only one is in use at
              * a time: vertices completed by SET_VERTEX4F, a payload written
              * with INLINE_ARRAY, or indices into the title's own arrays. */
+            if (s_ftrace == 2)
+                fprintf(stderr, "[FTRACE] end prim %u: imm %u inline %u idx %u"
+                        " xf_mode %u composite %d%c", s_gpu.prim,
+                        (unsigned)s_gpu.imm_count, (unsigned)s_gpu.inline_count,
+                        (unsigned)s_gpu.idx_count, (unsigned)s_gpu.xf_mode,
+                        s_gpu.composite_set, 10);
+            if (s_ftrace == 2 && s_gpu.inline_count) {
+                uint32_t w, a;
+                fprintf(stderr, "[FTRACE]   inline:");
+                for (w = 0; w < s_gpu.inline_count && w < 32; w++)
+                    fprintf(stderr, " %08X", s_gpu.inline_buf[w]);
+                fprintf(stderr, "%c[FTRACE]   formats:", 10);
+                for (a = 0; a < 16; a++)
+                    if (s_gpu.attr[a].size)
+                        fprintf(stderr, " v%u:%u/%u", a, s_gpu.attr[a].type,
+                                s_gpu.attr[a].size);
+                fprintf(stderr, "%c", 10);
+            }
             if (s_gpu.imm_count)
                 draw_immediate();
             else if (s_gpu.inline_count)
@@ -4448,7 +4493,8 @@ void nv2a_pb_exec_report(void)
         /* Frames per second of guest time, from flips between reports. */
         static uint32_t last_flips;
         static unsigned long last_ms;
-        unsigned long now = (unsigned long)(clock() * 1000.0 / CLOCKS_PER_SEC);
+        /* Wall time: clock() is CPU time summed over the raster threads. */
+        unsigned long now = (unsigned long)(xbox_HostNowNs() / 1000000u);
         if (last_ms && now > last_ms)
             fprintf(stderr, "[GPU] %.2f fps (%u flips)%c",
                     (s_gpu.flips - last_flips) * 1000.0 / (now - last_ms),
