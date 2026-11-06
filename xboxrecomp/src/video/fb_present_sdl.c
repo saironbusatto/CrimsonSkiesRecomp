@@ -307,7 +307,11 @@ int xbox_HostWindowMain(int (*guest_main)(void))
     if (scale < 1 || scale > 8)
         scale = 2;
 
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+    /* Linear: nearest at a non-integer window scale doubles some rows and
+     * columns and not others, a jagged look. RECOMP_WINDOW_NEAREST=1 for
+     * sharp pixels at integer scales. */
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,
+                env_on("RECOMP_WINDOW_NEAREST") ? "nearest" : "linear");
     if (SDL_Init(FBWIN_SDL_SUBSYSTEMS) != 0) {
         fprintf(stderr, "  [FBWIN] SDL video unavailable (%s); running headless\n",
                 SDL_GetError());

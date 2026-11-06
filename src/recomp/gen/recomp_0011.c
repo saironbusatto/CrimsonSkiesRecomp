@@ -2296,20 +2296,17 @@ loc_002390FE: ;
 
 /**
  * sub_00239369
- * Original: 0x00239369 - 0x00239391 (40 bytes, 11 insns)
+ * Original: 0x00239369 - 0x002393B7 (78 bytes, 24 insns)
  * Category: game_audio
  * CC: cdecl, 0 params, returns int_or_void
  * Frame: fpo_leaf
  */
 void sub_00239369(void)
 {
-    uint32_t ebp = 0;
-    ebp = g_ebp;  /* frameless: caller's frame */
     int _flags = 0; /* fallback flag var */
     uint32_t _fa = 0, _fb = 0;
     int32_t _fas = 0, _fbs = 0;
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00239369: ;
     PUSH32(esp, esi);
@@ -2319,7 +2316,7 @@ loc_0023936F: ;
     _fa = (uint32_t)(MEM32(0x242ED8)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x242ED8), 0 (32-bit) */
     esi = ZX8(LO8(eax));
-    if (CMP_EQ(_fa, _fb)) { g_seh_ebp = ebp; sub_00239391(); return; } /* je: equal / zero */
+    if (CMP_EQ(_fa, _fb)) goto loc_00239391; /* je: equal / zero */
 
 loc_0023937B: ;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
@@ -2334,7 +2331,33 @@ loc_0023937F: ;
 
 loc_0023938A: ;
     eax = 0x80004005u;
-    g_seh_ebp = ebp; sub_002393B3(); return; /* tail jmp 0x002393B3 */
+    goto loc_002393B3;
+
+loc_00239391: ;
+    PUSH32(esp, edi);
+    PUSH32(esp, MEM32(esp + 0x10));
+    PUSH32(esp, MEM32(esp + 0x10));
+    PUSH32(esp, 0x0023939Fu); RECOMP_ABI_CALL(0x00238F86u, sub_00238F86); /* call 0x00238F86 */
+
+loc_0023939F: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, 0 (32-bit) */
+    edi = eax;
+    if (CMP_EQ(_fa, _fb)) goto loc_002393B0; /* je: equal / zero */
+
+loc_002393A5: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x242EE4);
+    { uint32_t _icall_target = MEM32(0x28E488); PUSH32(esp, 0x002393B0u); RECOMP_ICALL_SAFE_AT(_icall_target, _icall_esp, 0x002393AAu); } /* indirect call */
+    }
+
+loc_002393B0: ;
+    eax = edi;
+    POP32(esp, edi);
+
+loc_002393B3: ;
+    POP32(esp, esi);
+    esp += 12; return; /* ret 8 */
 
 }
 

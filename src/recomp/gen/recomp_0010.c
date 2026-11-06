@@ -246750,3 +246750,65 @@ loc_00289ADB: ;
     esp += 12; return; /* ret 8 */
 
 }
+
+/**
+ * sub_00238F86
+ * Original: 0x00238F86 - 0x00238FCA (68 bytes, 24 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_00238F86(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_00238F86: ;
+    PUSH32(esp, esi);
+    esi = MEM32(esp + 8);
+    ecx = MEM32(esi + 0x10);
+    PUSH32(esp, 1);
+    PUSH32(esp, MEM32(esp + 0x10));
+    PUSH32(esp, 0x00238F99u); RECOMP_ABI_CALL(0x00238F00u, sub_00238F00); /* call 0x00238F00 */
+
+loc_00238F99: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 0 (32-bit) */
+    if (CMP_NE(_fa, _fb)) goto loc_00238FA6; /* jne: not equal / not zero */
+
+loc_00238F9D: ;
+    ecx = MEM32(esi + 0x10);
+    PUSH32(esp, eax);
+    PUSH32(esp, 0x00238FA6u); RECOMP_ABI_CALL(0x0023850Au, sub_0023850A); /* call 0x0023850A */
+
+loc_00238FA6: ;
+    ecx = MEM32(esi + 0xC);
+    eax = MEM32(ecx);
+    { uint32_t _icall_esp = g_esp;
+    { uint32_t _icall_target = MEM32(eax + 0x14); PUSH32(esp, 0x00238FAEu); RECOMP_ICALL_SAFE_AT(_icall_target, _icall_esp, 0x00238FABu); } /* indirect call */
+    }
+
+loc_00238FAE: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 0 (32-bit) */
+    if (CMP_L(_fas, _fbs)) goto loc_00238FC6; /* jl: less (signed <) */
+
+loc_00238FB2: ;
+    ecx = MEM32(esi + 0xC);
+    PUSH32(esp, 0x00238FBAu); RECOMP_ABI_CALL(0x0023DF2Fu, sub_0023DF2F); /* call 0x0023DF2F */
+
+loc_00238FBA: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 0 (32-bit) */
+    if (CMP_L(_fas, _fbs)) goto loc_00238FC6; /* jl: less (signed <) */
+
+loc_00238FBE: ;
+    ecx = MEM32(esi + 0xC);
+    PUSH32(esp, 0x00238FC6u); RECOMP_ABI_CALL(0x0023E088u, sub_0023E088); /* call 0x0023E088 */
+
+loc_00238FC6: ;
+    POP32(esp, esi);
+    esp += 12; return; /* ret 8 */
+
+}

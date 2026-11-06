@@ -143,8 +143,6 @@ void sub_00238C0A(void) { RECOMP_STUB_HIT(0x00238C0Au); g_esi = MEM32(g_esp); g_
 void sub_00238C37(void) { RECOMP_STUB_HIT(0x00238C37u); g_esp += 4; /* 0x00238C37: not detected */ }
 void sub_00238C61(void) { RECOMP_STUB_HIT(0x00238C61u); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 16; /* 0x00238C61: pop esi; ret 12 */ }
 void sub_00238C65(void) { RECOMP_STUB_HIT(0x00238C65u); g_esp += 4; /* 0x00238C65: not detected */ }
-void sub_00239391(void) { RECOMP_STUB_HIT(0x00239391u); g_esp += 4; /* 0x00239391: not detected */ }
-void sub_002393B3(void) { RECOMP_STUB_HIT(0x002393B3u); g_esi = MEM32(g_esp); g_esp += 4; g_esp += 12; /* 0x002393B3: pop esi; ret 8 */ }
 void sub_002399A8(void) { RECOMP_STUB_HIT(0x002399A8u); g_esp += 4; /* 0x002399A8: not detected */ }
 void sub_00239A0A(void) { RECOMP_STUB_HIT(0x00239A0Au); g_edi = MEM32(g_esp); g_esp += 4; g_ebx = MEM32(g_esp); g_esp += 4; g_esp += 20; /* 0x00239A0A: pop edi; pop ebx; ret 16 */ }
 void sub_002599F1(void) { RECOMP_STUB_HIT(0x002599F1u); g_esp += 4; /* 0x002599F1: not detected */ }

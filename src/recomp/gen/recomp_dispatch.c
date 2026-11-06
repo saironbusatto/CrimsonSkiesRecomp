@@ -11274,6 +11274,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00238DEAu, (recomp_func_t)sub_00238DEA },
     { 0x00238EB3u, (recomp_func_t)sub_00238EB3 },
     { 0x00238F00u, (recomp_func_t)sub_00238F00 },
+    { 0x00238F86u, (recomp_func_t)sub_00238F86 },
     { 0x00238FCAu, (recomp_func_t)sub_00238FCA },
     { 0x00239056u, (recomp_func_t)sub_00239056 },
     { 0x00239129u, (recomp_func_t)sub_00239129 },
@@ -12365,7 +12366,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0028E08Fu, (recomp_func_t)sub_0028E08F },
 };
 
-static const size_t g_recomp_table_size = 12345;
+static const size_t g_recomp_table_size = 12346;
 
 /* ----------------------------------------------------------------
  * Flat, directly-indexed dispatch.

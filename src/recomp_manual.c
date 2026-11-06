@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stddef.h>   /* ptrdiff_t */
 #include <string.h>
+#include <stdlib.h>
 #include "recomp/gen/recomp_types.h"
 
 typedef struct XBOX_GAMEPAD {
@@ -299,6 +300,22 @@ static void manual_sub_00286F28(void)
     XBOX_INPUT_STATE st;
     memset(&st, 0, sizeof(st));
     uint32_t err = xbox_InputGetState(0, &st);
+    /* RECOMP_PAD_SCRIPT drives the USB pad's reports; read the report here
+     * too, so a scripted run reaches the title through this stand-in. */
+    if (getenv("RECOMP_PAD_SCRIPT")) {
+        extern int usb_gamepad_report(int pad, uint8_t *out, int max);
+        static uint8_t last[20];
+        static uint32_t packet;
+        uint8_t r[20];
+        if (usb_gamepad_report(0, r, (int)sizeof r) == 20) {
+            if (memcmp(r, last, sizeof r)) { memcpy(last, r, sizeof r); packet++; }
+            st.dwPacketNumber = packet;
+            st.Gamepad.wButtons = (uint16_t)(r[2] | r[3] << 8);
+            memcpy(st.Gamepad.bAnalogButtons, &r[4], 8);
+            memcpy(&st.Gamepad.sThumbLX, &r[12], 8);
+            err = 0;
+        }
+    }
     if (err == 0) {
         memcpy((void *)((uintptr_t)g_xbox_mem_offset + pState), &st, sizeof(st));
         g_eax = 0;
