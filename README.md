@@ -1,14 +1,110 @@
 # Crimson Skies: High Road to Revenge — Static Recompilation (Native PC Port)
 
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue.svg)](#)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)](#platform-status)
 [![Language](https://img.shields.io/badge/language-C11-orange.svg)](#)
 [![Architecture](https://img.shields.io/badge/arch-x86__64-brightgreen.svg)](#)
-[![Release](https://img.shields.io/github/v/release/saironbusatto/CrimsonSkiesRecomp?color=brightgreen)](https://github.com/saironbusatto/CrimsonSkiesRecomp/releases/tag/v1.0.0)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
+[![Release](https://img.shields.io/github/v/release/saironbusatto/CrimsonSkiesRecomp?color=brightgreen)](https://github.com/saironbusatto/CrimsonSkiesRecomp/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A standalone native PC static recompilation of the 2003 Original Xbox classic **Crimson Skies: High Road to Revenge** (Title ID `0x4D530021`, Entry Point `0x001C7CA9`).
+A native PC static recompilation of the 2003 Original Xbox game **Crimson Skies: High Road to Revenge** (Title ID `0x4D530021`, entry point `0x001C7CA9`).
 
-Unlike conventional hypervisors or emulator frontends (e.g., xemu, Cxbx-Reloaded) that interpret or JIT-compile machine code with runtime virtualization overhead, this project performs **Ahead-Of-Time (AOT) binary lifting** of the retail Xbox x86-32 executable directly into standard C11. The generated code is paired with a custom high-performance Xbox kernel replacement and hardware abstraction layer (HAL), compiling directly to native 64-bit binaries for **Linux** (`crimsonskies`) and **Windows** (`crimsonskies.exe`).
+Emulators such as xemu or Cxbx-Reloaded interpret or JIT-compile the game's machine code while it runs. This project does it ahead of time instead: it lifts the retail Xbox x86-32 executable into C11 once. That C code is compiled together with a replacement Xbox kernel and models of the Xbox hardware (the NV2A GPU, the MCPX audio processor, the USB controllers) into an ordinary 64-bit program.
+
+**No game files are included.** You need your own legally dumped copy of the game.
+
+---
+
+## Platform Status
+
+| Platform | Status (v1.1.0) |
+| :--- | :--- |
+| **Linux x86-64** | **Playable.** Full intro, title screen, attract mode, menus with keyboard or gamepad. |
+| **Windows x86-64** | **Not working yet.** It builds, but it stops early in boot and shows a black screen. Tracked as a GitHub issue; no Windows binary is shipped in v1.1.0. |
+
+### What works (Linux)
+- Boots straight into the game: the Microsoft Game Studios and FASA logos, the intro movie, the 3D title screen and the attract loop.
+- Bink movies play with sound and can be skipped with **Start** (Enter).
+- Menus respond to the keyboard and to a USB/Xbox-style gamepad.
+- Runs for long sessions (4+ minutes of attract loop) without crashing.
+- 2x anti-aliased output is shown in a resizable window with smooth scaling.
+
+### Known issues
+- **Speed:** graphics are drawn by a software NV2A rasteriser on the CPU. Expect about 22–30 fps on a modern desktop CPU, lower on laptops. A GPU backend is planned.
+- **Audio** can stutter when the frame rate drops.
+- **Rare crash when pressing a key in the window** (`SIGSEGV` in the USB input path, `sub_00289AE0`). Seen only with real keypresses, not reproduced with scripted input. If it happens, just restart.
+- A second **"PRESS START"** is drawn at the bottom-left of the title screen.
+- Gameplay past the menus has not been tested much yet.
+
+---
+
+## Quick Start (Linux)
+
+1. Install the runtime libraries:
+   ```bash
+   # Debian / Ubuntu
+   sudo apt install -y libsdl2-2.0-0 libepoxy0
+   # Fedora / Nobara
+   sudo dnf install -y SDL2 libepoxy
+   ```
+2. Copy your game dump (the folder with `English.xbe` or `default.xbe`, the `.zip` archives and the `bink1`/`bink2` folders) somewhere on disk.
+3. Extract the release archive and run the game from the game folder:
+   ```bash
+   cd /path/to/crimson-skies
+   /path/to/crimsonskies English.xbe .
+   ```
+   Or copy `crimsonskies` into the game folder and run `./crimsonskies`.
+
+A window opens. The first launch creates the game's cache and save data under `~/.local/share/xboxrecomp/`; later launches start faster.
+
+### Keyboard controls
+
+Click the window first so it has keyboard focus. A connected gamepad works at the same time.
+
+| Key | Xbox controller |
+| :--- | :--- |
+| **Enter** | Start (skip movies, PRESS START, pause) |
+| **Backspace** | Back |
+| **Arrow keys** | D-pad (menu navigation) |
+| **Z / X / C / V** | A / B / X / Y |
+| **W A S D** (or keypad 8 4 2 6) | Left stick |
+| **I J K L** | Right stick |
+| **1 / 3** | Left / right trigger |
+| **Q / E** | White / Black |
+| **Shift / Ctrl** | Left / right stick click |
+
+### Gamepad controls (in flight)
+
+| Xbox Gamepad | Flight Action |
+| :--- | :--- |
+| **Left Stick** | Pitch & Roll |
+| **Right Stick** | Free look / camera |
+| **Right Trigger** | Machine guns |
+| **Left Trigger** | Secondary weapon |
+| **A** | Stunt / action |
+| **B** | Air brakes |
+| **X** | Cycle target |
+| **Y** | Cycle secondary weapon |
+| **D-Pad Up / Down** | Boost / cut throttle |
+| **Start** | Pause menu |
+| **Back** | Objectives |
+
+### Options
+
+The game starts with sensible defaults. These environment variables change them:
+
+| Variable | Effect |
+| :--- | :--- |
+| `RECOMP_DEFAULTS=0` | Do not turn on the default options below (for debugging). |
+| `RECOMP_FB_WINDOW=1` | Show the game window (default on). |
+| `RECOMP_HEADLESS=1` | Run without a window. |
+| `RECOMP_KEYBOARD=1` | Keyboard acts as controller 1 (default on). |
+| `RECOMP_WINDOW_NEAREST=1` | Sharp pixel scaling instead of smooth scaling. |
+| `RECOMP_AUDIO_BUF_SAMPLES=1024 RECOMP_AUDIO_BUF_COUNT=8` | Larger audio queue; can reduce stutter at the cost of latency. |
+| `RECOMP_RASTER_THREADS=N` | Number of CPU threads used to draw (default: CPU count − 4). |
+| `RECOMP_SAVE_DIR=/path` | Where saves and the title cache are kept. |
+| `RECOMP_STUB_LOG=1` | Log calls into functions that have not been recompiled yet (useful for bug reports). |
+
+The defaults are `RECOMP_USB=1 RECOMP_AC97_READY=1 RECOMP_VBLANK=paced RECOMP_TITLE_KEVENTS=1 RECOMP_PB_EXEC=1 RECOMP_FB_WINDOW=1 RECOMP_KEYBOARD=1`. Setting any of them yourself overrides that one.
 
 ---
 
@@ -17,37 +113,44 @@ Unlike conventional hypervisors or emulator frontends (e.g., xemu, Cxbx-Reloaded
 ```mermaid
 flowchart TD
     subgraph Original Xbox Binary
-        XBE["Russian/English.xbe (Retail 32-bit x86)"]
-        TEXT[".text / D3D / DSOUND / XPP Code Sections"]
+        XBE["English.xbe (retail 32-bit x86)"]
+        TEXT[".text / D3D / DSOUND / XPP / BINK sections"]
     end
 
     subgraph Static Recompilation Pipeline
-        LIFTER["Static Recompiler (x86-32 -> C11)"]
-        GEN["Generated C Translation Units\n(recomp_0000.c .. recomp_0011.c)"]
-        DISPATCH["Binary Search Function Dispatcher\n(recomp_dispatch.c)"]
+        LIFTER["Static recompiler (x86-32 -> C11)"]
+        GEN["Generated C translation units\n(recomp_0000.c .. recomp_0011.c)"]
+        DISPATCH["Binary-search function dispatcher\n(recomp_dispatch.c)"]
     end
 
-    subgraph Runtime & HAL Subsystems
-        MEM["Xbox Memory Manager\n• 4GB Guest Aperture\n• 128MB NV2A Contiguous Buffer\n• 28x Mirror Views"]
-        KERN["Kernel HLE Replacement\n• 147 Xbox Kernel Thunks\n• FatX VFS & Path Normalizer\n• Threading & Mutex Sync"]
-        GFX["NV2A Graphics Engine\n• Direct3D 11 (Windows)\n• OpenGL / Epoxy (Linux)\n• Dynamic FVF Parser"]
-        SND["Audio Engine\n• MCPX APU Voice Processor\n• DirectSound Mixer\n• XAudio2 / SDL2"]
-        INP["Input Subsystem\n• Safe XInput 1.4\n• SDL2 GameController HAL"]
-    end
-
-    subgraph Native PC Executables
-        LNX["Native Linux ELF (crimsonskies)\n• 64-bit • OpenGL • SDL2"]
-        WIN["Native Windows PE (crimsonskies.exe)\n• 64-bit • Direct3D 11 • Zero DLL Deps"]
+    subgraph Runtime & HAL
+        MEM["Xbox memory layout\n• 64 MB RAM + 128 MB contiguous window\n• RAM mirror views, tiled aperture"]
+        KERN["Kernel replacement\n• 147 kernel exports\n• FATX paths, threads, events, DPCs, interrupts"]
+        GFX["NV2A pushbuffer executor\n• Software rasteriser (multi-threaded)\n• Register combiners, 2x AA"]
+        SND["MCPX APU + AC'97 model\n• DirectSound runs unmodified\n• SDL2 audio output"]
+        INP["OHCI USB controller model\n• Xbox gamepad over USB\n• Keyboard / SDL2 gamepad"]
     end
 
     XBE --> LIFTER
     LIFTER --> GEN
     LIFTER --> DISPATCH
     GEN --> MEM & KERN & GFX & SND & INP
-    DISPATCH --> GFX & INP
-    MEM & KERN & GFX & SND & INP --> LNX
-    MEM & KERN & GFX & SND & INP --> WIN
+    MEM & KERN & GFX & SND & INP --> LNX["Native Linux ELF (crimsonskies)\n64-bit • SDL2 window"]
 ```
+
+The game's own Direct3D, DirectSound, Bink and XInput libraries are recompiled like the rest of the game and talk to the hardware models; they are not replaced by PC APIs.
+
+---
+
+## What's New in v1.1.0
+
+v1.0.0 booted but showed only a black screen (issue #11). v1.1.0 makes the game render, play sound and take input:
+
+- **Rendering:** the game's real Direct3D device setup and present path run instead of hand-written stand-ins, and functions the recompiler had cut short were lifted. Pre-transformed `rhw=0` vertices are drawn, and drawing is spread over several CPU threads.
+- **Movies and sound:** the DirectSound interrupt and DPC path and the Bink sound callbacks are recompiled, so movies advance with audio. A missing DirectSound method that crashed the game on entering the menu was lifted.
+- **Input:** the Xbox USB controller stack works on Linux x86-64. The keyboard acts as a controller by default.
+- **Window:** 2x-wide anti-aliased frames are shown (the window used to freeze on an old frame) with smooth scaling; only the visible AA sample is shaded, about 30% faster.
+- **Build:** Release (optimised) is now the default build type. A plain `./crimsonskies` starts with all the needed options.
 
 ---
 
@@ -78,7 +181,7 @@ The Original Xbox shared unified memory between the CPU and the NV2A GPU (64 MB 
 
 #### The Bug & Fix
 During early initialization, the recompiled engine would crash with segmentation faults at `0x87C080B0`. Investigation revealed that Crimson Skies streams massive terrain meshes and multi-buffered push commands, exhausting the default 16 MB contiguous allocation window.
-- **Solution:** Re-architected `xbox_MemoryLayoutInit` in [`src/kernel/kernel.h`](file:///home/saironcb/PROJETOS/REA/xboxrecomp/src/kernel/kernel.h), [`src/kernel/nv2a_pb_scan.c`](file:///home/saironcb/PROJETOS/REA/xboxrecomp/src/kernel/nv2a_pb_scan.c), and [`src/usb/ohci.c`](file:///home/saironcb/PROJETOS/REA/xboxrecomp/src/usb/ohci.c) to expand the contiguous physical buffer to **128 MB**, allocating 28 virtual memory mirror views across 1.8 GB of address space.
+- **Solution:** Re-architected `xbox_MemoryLayoutInit` in [`src/kernel/kernel.h`](xboxrecomp/src/kernel/kernel.h), [`src/kernel/nv2a_pb_scan.c`](xboxrecomp/src/kernel/nv2a_pb_scan.c), and [`src/usb/ohci.c`](xboxrecomp/src/usb/ohci.c) to expand the contiguous physical buffer to **128 MB**, allocating 28 virtual memory mirror views across 1.8 GB of address space.
 
 ---
 
@@ -106,7 +209,7 @@ void manual_Direct3D_Clear(void) {
     g_esp += (24 + 4); /* Pops both arguments (24 bytes) AND return address (4 bytes) */
 }
 ```
-All manual method overrides across [`src/recomp_manual.c`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp_manual.c) were audited and corrected to maintain bit-perfect stack parity with hardware x86 `RET N` instructions.
+All manual method overrides across [`src/recomp_manual.c`](src/recomp_manual.c) were audited and corrected to maintain bit-perfect stack parity with hardware x86 `RET N` instructions.
 
 ---
 
@@ -125,7 +228,7 @@ At startup, the Microsoft Visual C++ runtime executes a static initializer table
 | `0x0028E25B` | **Input State** | Zeroes controller state structures and binds vtables at `0x32DC50`. |
 | `0x0028E28B` | **Input State** | Zeroes controller state structures and binds vtables at `0x32DCC0`. |
 
-We synthesized functional C implementations for all 8 routines in [`src/recomp_manual.c`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp_manual.c) and hooked them into [`recomp_lookup_manual()`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp_manual.c).
+We synthesized functional C implementations for all 8 routines in [`src/recomp_manual.c`](src/recomp_manual.c) and hooked them into [`recomp_lookup_manual()`](src/recomp_manual.c).
 
 ---
 
@@ -156,9 +259,9 @@ sequenceDiagram
 4. When `InputMgr` was subsequently queried, `ecx` held corrupted value `0x54`. The instruction `mov eax, [ecx]` loaded code bytes `0x8D5250C7` as a device handle, and `XInputGetState` attempted to dereference `[0x8D5250C7 + 0xA3]`, segfaulting instantly at `0x8D52516A`.
 
 #### The Fix
-- Implemented the complete Xbox FVF descriptor parser in [`manual_sub_00201910`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp_manual.c), reconstructing stride lengths and stream mappings into `0x213258`.
-- Replaced `sub_00202590` with [`manual_sub_00202590`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp_manual.c), cleanly preserving `esi`, `edi`, `ebx`, `ebp` and popping arguments correctly.
-- Hardened `XInputGetState` ([`manual_sub_00286F28`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp_manual.c)) using [`xbox_is_valid_ram()`](file:///home/saironcb/PROJETOS/REA/xboxrecomp/src/kernel/kernel.h), gracefully returning `ERROR_DEVICE_NOT_CONNECTED` (`0x48F`) for invalid handles without dereferencing guest memory.
+- Implemented the complete Xbox FVF descriptor parser in [`manual_sub_00201910`](src/recomp_manual.c), reconstructing stride lengths and stream mappings into `0x213258`.
+- Replaced `sub_00202590` with [`manual_sub_00202590`](src/recomp_manual.c), cleanly preserving `esi`, `edi`, `ebx`, `ebp` and popping arguments correctly.
+- Hardened `XInputGetState` ([`manual_sub_00286F28`](src/recomp_manual.c)) using [`xbox_is_valid_ram()`](xboxrecomp/src/kernel/kernel.h), gracefully returning `ERROR_DEVICE_NOT_CONNECTED` (`0x48F`) for invalid handles without dereferencing guest memory.
 
 ---
 
@@ -170,7 +273,7 @@ Initially, the framework used:
 ```
 This meant lifted direct function calls (`RECOMP_ABI_CALL(0x00202590u, sub_00202590)`) bypassed the manual dispatch table, calling broken machine-lifted stubs directly.
 
-We modified [`src/recomp/gen/recomp_types.h`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/src/recomp/gen/recomp_types.h#L1161-L1167):
+We modified [`src/recomp/gen/recomp_types.h`](src/recomp/gen/recomp_types.h#L1161-L1167):
 ```c
 extern RecompFn recomp_lookup_manual(uint32_t target_va);
 
@@ -187,112 +290,57 @@ This enables zero-overhead hotpatching of direct call sites across the entire li
 
 ---
 
-## Dual Native PC Deliverables
-
-| Attribute | Linux ELF Executable | Windows PE Executable |
-| :--- | :--- | :--- |
-| **Binary File** | [`build-linux/crimsonskies`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/build-linux/crimsonskies) | [`build-windows/crimsonskies.exe`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/build-windows/crimsonskies.exe) |
-| **Binary Size** | 37 MB (with debug symbols) / 7.1 MB (stripped) | 18 MB / 7.0 MB (stripped) |
-| **Graphics API** | OpenGL 3.3+ via Epoxy | Direct3D 11 (`d3d11.dll`, `dxgi.dll`) |
-| **Audio API** | SDL2 Audio | XAudio2 (`XAudio2_8.dll`) / WinMM |
-| **Input API** | SDL2 GameController | Native XInput 1.4 (`XINPUT1_4.dll`) |
-| **C Runtime Linking** | Dynamic glibc | **Fully Static** (`-static -static-libgcc`) |
-| **Third-Party DLLs**| None | **Zero** (relies strictly on Windows OS DLLs) |
-| **Stability Validation** | 5,000,000+ continuous main loop frames | Verified under Wine & Windows 10/11 |
-
----
-
 ## Building from Source
 
-### 1. Native Linux Build
+The repository includes the `xboxrecomp` toolkit (kernel, hardware models, runtime) as the `xboxrecomp/` subfolder. Build against that copy: an older checkout elsewhere on disk will build, but without the fixes this game needs.
+
+### Linux
 
 #### Requirements
-- CMake >= 3.20
+- CMake 3.20 or newer
 - GCC or Clang with C11 support
-- `libsdl2-dev`, `libepoxy-dev`, `pkg-config`
+- SDL2 and libepoxy development packages, `pkg-config`
 
 ```bash
-# Debian / Ubuntu:
+# Debian / Ubuntu
 sudo apt install -y build-essential cmake libsdl2-dev libepoxy-dev pkg-config
 
-# Fedora / Nobara / RHEL:
-sudo dnf install -y gcc gcc-c++ cmake SDL2-devel libepoxy-devel pkgconfig
+# Fedora / Nobara / RHEL
+sudo dnf install -y gcc cmake SDL2-devel libepoxy-devel pkgconfig
 ```
 
 #### Compiling
 ```bash
-cmake -B build-linux -DCMAKE_BUILD_TYPE=Release
+cmake -B build-linux -DCMAKE_BUILD_TYPE=Release -DXBOXRECOMP_DIR=$PWD/xboxrecomp
 cmake --build build-linux -j$(nproc)
 ```
-The executable is generated at `build-linux/crimsonskies`.
+The executable is `build-linux/crimsonskies`. Release is the default build type; a Debug build runs at about 3 fps.
 
----
-
-### 2. Standalone Windows Build (Cross-Compiling on Linux)
-
-The project includes a standalone MinGW-w64 toolchain definition ([`mingw-toolchain.cmake`](file:///home/saironcb/PROJETOS/REA/crimsonskies-recomp/mingw-toolchain.cmake)) enabling native Windows builds directly from Linux.
+### Windows (cross-compiled with MinGW-w64, work in progress)
 
 ```bash
-cmake -B build-windows \
+cmake -B build-win \
       -DCMAKE_TOOLCHAIN_FILE=mingw-toolchain.cmake \
-      -DCMAKE_BUILD_TYPE=Release
-cmake --build build-windows -j$(nproc)
+      -DCMAKE_BUILD_TYPE=Release \
+      -DXBOXRECOMP_DIR=$PWD/xboxrecomp
+cmake --build build-win -j$(nproc)
 ```
-The static Windows executable is generated at `build-windows/crimsonskies.exe`.
+This produces `build-win/crimsonskies.exe`. It currently stops early in boot with a black screen (see [Platform Status](#platform-status)). Edit the paths in `mingw-toolchain.cmake` to match your MinGW install.
 
 ---
 
-## Running the Game
+## Reporting Bugs
 
-### Game Asset Setup
-
-This repository contains only source code and recompiled logic. **No game assets are distributed.**
-
-1. Obtain a legal copy of *Crimson Skies: High Road to Revenge* (USA / World English edition) from your original Xbox game disc.
-2. Extract the disc contents (`English.xbe` or `default.xbe`, textures, maps, and sound banks) into a folder.
-
-### Executing
-
-#### On Linux:
+Run from a terminal and keep the output:
 ```bash
-# Automatic detection (when placed inside the game data folder):
-./crimsonskies
-
-# Or pass paths explicitly:
-./crimsonskies /path/to/English.xbe /path/to/game_data/
+RECOMP_STUB_LOG=1 ./crimsonskies English.xbe . 2> crimsonskies.log
 ```
-
-#### On Windows:
-```cmd
-REM Place crimsonskies.exe inside the game data folder and run:
-crimsonskies.exe
-
-REM Or pass arguments explicitly:
-crimsonskies.exe English.xbe .
-```
-
----
-
-## Default Controls
-
-| Xbox Gamepad | Flight Action |
-| :--- | :--- |
-| **Left Analog Stick** | Pitch & Roll (Flight Steering) |
-| **Right Analog Stick** | Free Look / Camera Orbit |
-| **Right Trigger (RT)** | Primary Machine Guns |
-| **Left Trigger (LT)** | Heavy Secondary Weapons (Rockets / Torpedoes) |
-| **A Button** | Stunt Maneuver / Action |
-| **B Button** | Air Brakes |
-| **X Button** | Cycle Target |
-| **Y Button** | Cycle Secondary Weapon |
-| **D-Pad Up / Down** | Throttle Boost / Cut Engine |
-| **Start Button** | Pause / In-Game Menu |
-| **Back Button** | Objectives / Flight Telemetry |
+Attach `crimsonskies.log` to a GitHub issue together with your distro, CPU and what you were doing.
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE). 
+This project is licensed under the [MIT License](LICENSE).
 
-*Xbox and Crimson Skies are registered trademarks of Microsoft Corporation. This project is a clean-room educational and preservation research effort and is not affiliated with, endorsed by, or sponsored by Microsoft.*
+*Xbox and Crimson Skies are registered trademarks of Microsoft Corporation. This project is an educational and preservation research effort and is not affiliated with, endorsed by, or sponsored by Microsoft. No game assets are distributed.*

@@ -317,6 +317,24 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
+    /* The options the game needs to show a window, play sound and read the
+     * pad or keyboard, on unless RECOMP_DEFAULTS=0 or the variable is already set. */
+    if (!getenv("RECOMP_DEFAULTS") || strcmp(getenv("RECOMP_DEFAULTS"), "0")) {
+        static const char *defaults[][2] = {
+            {"RECOMP_USB", "1"}, {"RECOMP_AC97_READY", "1"}, {"RECOMP_VBLANK", "paced"},
+            {"RECOMP_TITLE_KEVENTS", "1"}, {"RECOMP_PB_EXEC", "1"}, {"RECOMP_FB_WINDOW", "1"},
+            {"RECOMP_KEYBOARD", "1"},
+        };
+        for (size_t i = 0; i < sizeof defaults / sizeof defaults[0]; i++) {
+            if (getenv(defaults[i][0])) continue;
+#ifdef _WIN32
+            _putenv_s(defaults[i][0], defaults[i][1]);
+#else
+            setenv(defaults[i][0], defaults[i][1], 0);
+#endif
+        }
+    }
+
     printf("========================================================\n");
     printf(" Crimson Skies: High Road to Revenge - Native Recomp\n");
     printf("========================================================\n");
