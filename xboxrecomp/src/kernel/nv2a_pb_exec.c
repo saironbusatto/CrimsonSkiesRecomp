@@ -2166,15 +2166,27 @@ static void zbuf_clear(void)
             z[k] = v;
 }
 
+/* EQUAL and NOTEQUAL within a few ulps. Multipass titles redraw a mesh with
+ * depth EQUAL (Crimson Skies' reflection pass on the plane), often from a
+ * different vertex program. Near the top of the 24-bit range a float holds
+ * about one unit, so the two passes' depths differ by 1-2 units in scattered
+ * pixels: an exact compare left a flickering black stipple.
+ * ponytail: relative tolerance on float depth, not the hardware's integer
+ * compare; quantize z on store if a title shows the difference. */
+static int depth_equal(float z, float stored)
+{
+    return fabsf(z - stored) <= fmaxf(fabsf(stored), 1.0f) * 3e-7f;
+}
+
 static int depth_pass(float z, float stored)
 {
     switch (s_gpu.depth_func) {                   /* GL enums, as the NV2A */
     case 0x200: return 0;
     case 0x201: return z <  stored;
-    case 0x202: return z == stored;
+    case 0x202: return depth_equal(z, stored);
     case 0x203: return z <= stored;
     case 0x204: return z >  stored;
-    case 0x205: return z != stored;
+    case 0x205: return !depth_equal(z, stored);
     case 0x206: return z >= stored;
     default:    return 1;
     }
@@ -2274,14 +2286,75 @@ static void rc_texel(const Texture *t, uint32_t face, float u, float v,
         out[0] = out[1] = out[2] = out[3] = 1.0f;
 }
 
+/* A cube map texel in direction (x, y, z); a 2D texture reads at (x, y). */
+static void rc_cube_texel(const Texture *t, float x, float y, float z,
+                          float out[4])
+{
+    float ax = fabsf(x), ay = fabsf(y), az = fabsf(z), ma, sc, tc;
+    uint32_t face;
+
+    if (!t->cube) {
+        rc_texel(t, 0, x, y, out);
+        return;
+    }
+    if (ax >= ay && ax >= az) {
+            face = x > 0 ? 0 : 1; ma = ax; sc = x > 0 ? -z : z; tc = -y;
+        } else if (ay >= az) {
+            face = y > 0 ? 2 : 3; ma = ay; sc = x; tc = y > 0 ? z : -z;
+        } else {
+            face = z > 0 ? 4 : 5; ma = az; sc = z > 0 ? x : -x; tc = -y;
+        }
+    if (ma == 0.0f)
+        ma = 1.0f;
+    rc_texel(t, face * tex_face_stride(t), (sc / ma + 1.0f) * 0.5f,
+             (tc / ma + 1.0f) * 0.5f, out);
+}
+
+/* A previous stage's texel as a vector, by SET_DOT_RGBMAPPING (xemu psh.c
+ * dotmap_* with sign1/sign2/sign3): 0 keeps 0..1; 1 (D3D) is biased,
+ * 128 = 0; 2 (GL) and 3 read the byte as two's complement.
+ * ponytail: the HILO modes (4-7) read as 0..1. */
+static void rc_dotmap(uint32_t map, const float in[4], float v[3])
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        float b = floorf(in[i] * 255.0f + 0.5f);
+        switch (map) {
+        case 1: v[i] = (b - 128.0f) / 127.0f; break;
+        case 2: v[i] = b >= 128.0f ? (b - 255.5f) / 127.5f : (b + 0.5f) / 127.5f; break;
+        case 3: v[i] = b >= 128.0f ? (b - 256.0f) / 127.0f : b / 127.0f; break;
+        default: v[i] = in[i]; break;
+        }
+    }
+}
+
+/* Per-pixel state the dot-product stages hand on to later stages. */
+typedef struct {
+    float dot[4];                     /* stage i's dot product */
+    float w[4];                       /* stage i's texture coordinate .w */
+} RcDot;
+
+/* Stage st's dot product: its texture coordinate . the input stage's texel. */
+static float rc_dot(int st, const float c[4], float tex[4][4])
+{
+    uint32_t in = st == 1 ? 0 : st == 2 ? (s_gpu.rc.other_input >> 16) & 1
+                                        : (s_gpu.rc.other_input >> 20) & 3;
+    float v[3];
+
+    rc_dotmap((s_gpu.rc.dot_mapping >> (4 * (st - 1))) & 7, tex[in], v);
+    return c[0] * v[0] + c[1] * v[1] + c[2] * v[2];
+}
+
 /* What texture stage `st` contributes, by its SHADER_STAGE_PROGRAM mode
- * (xemu psh.c). Returns 0 when a clip-plane stage kills the pixel. */
-static int rc_stage_fetch(int st, const float c[4], float out[4])
+ * (xemu psh.c), into tex[st]; tex[0..st) are the stages before it.
+ * Returns 0 when a clip-plane stage kills the pixel. */
+static int rc_stage_fetch(int st, const float c[4], float tex[4][4], RcDot *d)
 {
     const Texture *t = &s_gpu.texs[st];
     uint32_t mode = (s_gpu.rc.stage_program >> (st * 5)) & 0x1F, j;
-    float q = c[3] != 0.0f ? c[3] : 1.0f;
+    float q = c[3] != 0.0f ? c[3] : 1.0f, *out = tex[st];
 
+    d->w[st] = c[3];
     switch (mode) {
     case 0:                                       /* NONE */
         out[0] = out[1] = out[2] = 0.0f; out[3] = 1.0f;
@@ -2289,27 +2362,43 @@ static int rc_stage_fetch(int st, const float c[4], float out[4])
     case 1: case 2:                               /* PROJECT2D / 3D */
         rc_texel(t, 0, c[0] / q, c[1] / q, out);
         return 1;
-    case 3: {                                     /* CUBEMAP */
-        float x = c[0], y = c[1], z = c[2];
-        float ax = fabsf(x), ay = fabsf(y), az = fabsf(z), ma, sc, tc;
-        uint32_t face;
-        if (!t->cube) {
-            rc_texel(t, 0, c[0], c[1], out);
+    case 3:                                       /* CUBEMAP */
+        rc_cube_texel(t, c[0], c[1], c[2], out);
+        return 1;
+    case 0x09:                                    /* DOT_ST: 2D at (dot1, dot2) */
+        if (st < 2)
+            break;
+        d->dot[st] = rc_dot(st, c, tex);
+        rc_texel(t, 0, d->dot[st - 1], d->dot[st], out);
+        return 1;
+    case 0x0C: case 0x0E: case 0x12: {            /* DOT_RFLCT_SPEC, DOT_STR_CUBE, _SPEC_CONST */
+        float n[3], e[3], ne, nn;
+        if (st < 3)
+            break;
+        d->dot[3] = rc_dot(3, c, tex);
+        n[0] = d->dot[1]; n[1] = d->dot[2]; n[2] = d->dot[3];
+        if (mode == 0x0E) {                       /* the dots are the direction */
+            rc_cube_texel(t, n[0], n[1], n[2], out);
             return 1;
         }
-        if (ax >= ay && ax >= az) {
-            face = x > 0 ? 0 : 1; ma = ax; sc = x > 0 ? -z : z; tc = -y;
-        } else if (ay >= az) {
-            face = y > 0 ? 2 : 3; ma = ay; sc = x; tc = y > 0 ? z : -z;
-        } else {
-            face = z > 0 ? 4 : 5; ma = az; sc = z > 0 ? x : -x; tc = -y;
-        }
-        if (ma == 0.0f)
-            ma = 1.0f;
-        rc_texel(t, face * tex_face_stride(t), (sc / ma + 1.0f) * 0.5f,
-                 (tc / ma + 1.0f) * 0.5f, out);
+        /* Reflect the eye vector -- the stages' .w, or (0,0,1) for
+         * SPEC_CONST -- about the normal: 2n(n.e)/(n.n) - e. */
+        if (mode == 0x12) { e[0] = 0.0f; e[1] = 0.0f; e[2] = 1.0f; }
+        else { e[0] = d->w[1]; e[1] = d->w[2]; e[2] = d->w[3]; }
+        ne = n[0] * e[0] + n[1] * e[1] + n[2] * e[2];
+        nn = n[0] * n[0] + n[1] * n[1] + n[2] * n[2];
+        if (nn == 0.0f)
+            nn = 1.0f;
+        rc_cube_texel(t, 2.0f * n[0] * ne / nn - e[0], 2.0f * n[1] * ne / nn - e[1],
+                      2.0f * n[2] * ne / nn - e[2], out);
         return 1;
     }
+    case 0x11:                                    /* DOTPRODUCT: feeds a later stage */
+        if (st == 0)
+            break;
+        d->dot[st] = rc_dot(st, c, tex);
+        out[0] = out[1] = out[2] = out[3] = 0.0f;
+        return 1;
     case 4:                                       /* PASSTHRU */
         for (j = 0; j < 4; j++)
             out[j] = c[j] < 0.0f ? 0.0f : (c[j] > 1.0f ? 1.0f : c[j]);
@@ -2323,11 +2412,13 @@ static int rc_stage_fetch(int st, const float c[4], float out[4])
         }
         return 1;
     default:
-        /* ponytail: bump-env and dot-product modes read zero; they are water
-         * and bump effects -- add them when a title's look depends on one. */
-        out[0] = out[1] = out[2] = out[3] = 0.0f;
-        return 1;
+        break;
     }
+    /* ponytail: bump-env, BRDF, DOT_ZW, DOT_RFLCT_DIFF, DOT_STR_3D and the
+     * dependent AR/GB modes read zero -- add them when a title's look
+     * depends on one. */
+    out[0] = out[1] = out[2] = out[3] = 0.0f;
+    return 1;
 }
 
 /* The fixed-function fog unit, per vertex, from the program's oFog.x
@@ -2426,6 +2517,7 @@ static void xf_rows(const XfTri *T, int y0, int step, XfCount *cnt)
                     pw = l0 * T->iw[0] + l1 * T->iw[1] + l2 * T->iw[2];
                     if (T->use_rc) {
                         float d1[4], fog[4], t[4][4], out[4], tc[4];
+                        RcDot dots = { { 0 } };
                         int st, j, keep = 1;
                         for (k = 0; k < 4; k++)
                             d1[k] = l0 * va->d1[k] + l1 * vb->d1[k] + l2 * vc->d1[k];
@@ -2440,7 +2532,7 @@ static void xf_rows(const XfTri *T, int y0, int step, XfCount *cnt)
                             for (j = 0; j < 4; j++)
                                 tc[j] = (l0 * T->stc[0][st][j] + l1 * T->stc[1][st][j]
                                        + l2 * T->stc[2][st][j]) / pw;
-                            keep = rc_stage_fetch(st, tc, t[st]);
+                            keep = rc_stage_fetch(st, tc, t, &dots);
                         }
                         if (!keep)
                             continue;
@@ -2465,7 +2557,11 @@ static void xf_rows(const XfTri *T, int y0, int step, XfCount *cnt)
                             continue;
                     }
                 }
-                if (zp && s_gpu.depth_mask)
+                /* GL and the NV2A write depth only with the test on:
+                 * DEPTH_MASK alone does nothing. Crimson Skies draws its
+                 * fog-coloured sea backdrop with the test off and the mask
+                 * on; writing it buried the water tiles drawn after it. */
+                if (zp && s_gpu.depth_test && s_gpu.depth_mask)
                     *zp = z;
                 if (s_gpu.zpass_enable)
                     cnt->zpass++;
@@ -2722,7 +2818,7 @@ static void raster_xf_triangle(const Nv2aVshOutput *va, const Nv2aVshOutput *vb,
     s_gpu.xf_seeded = 1;
     if (!surface_begin_batch(T.mem))
         return;
-    if (s_gpu.depth_test || s_gpu.depth_mask)
+    if (s_gpu.depth_test)
         T.zb = zbuf_current(1);
     if (tex_size_from_format(s_gpu.texs[0].color)) {
         su = (float)s_gpu.texs[0].width;
@@ -3282,17 +3378,23 @@ static void draw_primitive(void)
                         s_xf[0].pos[0], s_xf[0].pos[1], s_xf[0].pos[2],
                         s_xf[0].pos[3], s_xf[1].pos[0], s_xf[1].pos[1],
                         s_xf[2].pos[0], s_xf[2].pos[1], 10);
+            if ((s_gpu.xf_mode & 3) == 2 && s_xf)
+                fprintf(stderr, "[FTRACE]     fog en %u mode %X param %g %g color %08X | oFog %g %g %g\n",
+                        s_gpu.fog_enable, s_gpu.fog_mode, s_gpu.fog_param[0],
+                        s_gpu.fog_param[1], s_gpu.fog_color, s_xf[0].fog[0],
+                        s_xf[1].fog[0], s_xf[2].fog[0]);
             if (s_gpu.rc_seen) {
                 int st;
-                fprintf(stderr, "[FTRACE]     rc stages %u ctl %08X prog %05X fin %08X %08X",
+                fprintf(stderr, "[FTRACE]     rc stages %u ctl %08X prog %05X fin %08X %08X dotmap %03X input %06X",
                         s_gpu.rc.control & 0xFF, s_gpu.rc.control,
-                        s_gpu.rc.stage_program, s_gpu.rc.final0, s_gpu.rc.final1);
+                        s_gpu.rc.stage_program, s_gpu.rc.final0, s_gpu.rc.final1,
+                        s_gpu.rc.dot_mapping, s_gpu.rc.other_input);
                 for (st = 0; st < 4; st++)
                     if ((s_gpu.rc.stage_program >> (st * 5)) & 0x1F)
                         fprintf(stderr, " | t%d %08X %ux%u fmt %02X%s", st,
                                 s_gpu.texs[st].offset, s_gpu.texs[st].width,
                                 s_gpu.texs[st].height, s_gpu.texs[st].color,
-                                s_gpu.texs[st].valid ? "" : " (invalid)");
+                                s_gpu.texs[st].valid ? (s_gpu.texs[st].cube ? " cube" : "") : " (invalid)");
                 fputc(10, stderr);
                 for (st = 0; st < (int)(s_gpu.rc.control & 0xFF) && st < 8; st++)
                     fprintf(stderr, "[FTRACE]       s%d icw %08X %08X ocw %08X %08X c %08X %08X%c",
@@ -3302,7 +3404,7 @@ static void draw_primitive(void)
             }
             if ((s_gpu.xf_mode & 3) == 2) {
                 uint32_t r;
-                for (r = 112; r < 116; r++) {
+                for (r = 100; r < 117; r++) {
                     const float *c = nv2a_vsh_constant(r);
                     fprintf(stderr, "[FTRACE]     c[%u] %g %g %g %g%c", r,
                             c[0], c[1], c[2], c[3], 10);
@@ -3946,6 +4048,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
         s_gpu.rc_seen = 1;
         break;
     case 0x1E70: s_gpu.rc.stage_program = param; break;
+    case 0x1E74: s_gpu.rc.dot_mapping = param; break;
+    case 0x1E78: s_gpu.rc.other_input = param; break;
     case 0x17F8: s_gpu.clip_plane_mode = param; break;
 
     /* Alpha test and fog. */
