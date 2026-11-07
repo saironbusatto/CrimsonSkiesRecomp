@@ -3865,8 +3865,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      * ever: the title froze at the first screen whose walk was long enough to
      * enter it. So for a mirrored fence the latch carries the mirror's fence
      * bits and the marker's address, which is what a GPU that had consumed
-     * everything would report. */
-    if (method == 0x0310 && subch == 5 && nv2a_pb_dma_walk()) {
+     * everything would report.
+     *
+     * Latched under the segment scan as well as the DMA walk: both execute
+     * the pushbuffer in order, so the marker is reached exactly when what
+     * precedes it has run. Crimson Skies' InsertFence (0x204EF0) emits the
+     * marker as (address << 5) | (fence & 0x1F) and BlockOnTime spins until
+     * those bits match the semaphore; gated on the walk, the latch stayed 0
+     * under the default scan and the first real fence wait hung. */
+    if (method == 0x0310 && subch == 5) {
         volatile uint32_t *r = xbox_Nv2aRegPtr(0x400B10);
 
         if (!r)
