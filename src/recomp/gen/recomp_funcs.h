@@ -11381,6 +11381,18 @@ void sub_0028DEB0(void);
 void sub_0028DEE3(void);
 
 void sub_00236B30(void);
+void sub_0023F036(void);
+void sub_002374E9(void);
+void sub_002387C5(void);
+void sub_002387F8(void);
+void sub_0023882B(void);
+void sub_0023885E(void);
+void sub_002388B0(void);
+void sub_00238902(void);
+void sub_00239104(void);
+void sub_0016F010(void);
+void sub_001F50C8(void);
+void sub_00185110(void);
 #endif /* RECOMP_FUNCS_H */
 void sub_00204AD0(void);
 void sub_00203780(void);
