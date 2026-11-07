@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <ucontext.h>
 #include <unistd.h>
+#include <execinfo.h>
 #include "platform/win32_compat.h"
 #include "video/video_player.h"
 #endif
@@ -217,6 +218,16 @@ static void posix_fault_handler(int sig, siginfo_t *si, void *uc)
                 (uint32_t)((uintptr_t)si->si_addr - (uintptr_t)g_xbox_mem_offset));
     }
     print_guest_context(NULL);
+    {
+        /* Host frames: the faulting sub_XXXXXXXX is the first one, which the
+         * guest stack above cannot name. Resolve with addr2line -f -e. */
+        void *bt[24];
+        int n = backtrace(bt, 24);
+        fprintf(stderr, "  host rip=%p, host stack:\n",
+                (void *)((ucontext_t *)uc)->uc_mcontext.gregs[REG_RIP]);
+        fflush(stderr);
+        backtrace_symbols_fd(bt, n, 2);
+    }
     fflush(stderr);
 
     signal(sig, SIG_DFL);
