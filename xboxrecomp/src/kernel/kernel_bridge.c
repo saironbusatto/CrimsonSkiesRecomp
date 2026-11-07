@@ -46,6 +46,8 @@
 #include <ctype.h>
 #include <wctype.h>
 
+static int restore_launch_data(void);   /* the title rebooting into itself */
+
 /* Access to recompiled code registers. Per-thread: RECOMP_TLS comes from
  * xbox_memory_layout.h and must match the definitions there -- a plain extern
  * here binds to the TLS template rather than the calling thread's copy, which
@@ -238,7 +240,7 @@ static void kernel_data_init(void)
      * RECOMP_CMDLINE does the same thing here, so a title can be told to load
      * a level the way the console would tell it: "+map intro".
      */
-    {
+    if (!restore_launch_data()) {
         const char *cmdline = getenv("RECOMP_CMDLINE");
 
         if (cmdline && *cmdline) {
@@ -1750,6 +1752,117 @@ static void bridge_ExQueryNonVolatileSetting(void)
     g_eax = (uint32_t)st;
 }
 
+/* A title rebooting into itself.
+ *
+ * Crimson Skies leaves the menus for a mission by filling the launch data page
+ * with its own image and calling HalReturnToFirmware(2): the console reboots
+ * and the title reads the page back through XGetLaunchInfo. Treated as a quit,
+ * the window closed the moment a mission was picked. So for a quick reboot
+ * whose page names this title, the page goes into RECOMP_LAUNCH_DATA (hex) and
+ * the process re-executes itself; the new instance puts the page back at boot.
+ * A launch of anything else (the dashboard, another image) still exits. */
+#define LAUNCH_PAGE_SIZE 0x1000u
+#define LAUNCH_ENV       "RECOMP_LAUNCH_DATA"
+#define XBE_CERT_ADDR_VA 0x00010118u   /* XBE header: certificate address */
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
+static int restore_launch_data(void)
+{
+    const char *hex = getenv(LAUNCH_ENV);
+    uint32_t page, i;
+
+    if (!hex || strlen(hex) != LAUNCH_PAGE_SIZE * 2)
+        return 0;
+    page = xbox_HeapAlloc(LAUNCH_PAGE_SIZE, 4096);
+    if (!page)
+        return 0;
+    for (i = 0; i < LAUNCH_PAGE_SIZE; i++) {
+        unsigned v = 0;
+        sscanf(hex + 2 * i, "%2x", &v);
+        BRIDGE_MEM8(page + i) = (uint8_t)v;
+    }
+    BRIDGE_MEM32(XBOX_KERNEL_DATA_BASE + KDATA_LAUNCH_DATA_PAGE) = page;
+    fprintf(stderr, "  Launch data: restored from the previous instance at 0x%08X"
+                    " (type %u)\n", page, BRIDGE_MEM32(page));
+#ifdef _WIN32
+    _putenv(LAUNCH_ENV "=");
+#else
+    unsetenv(LAUNCH_ENV);
+#endif
+    return 1;
+}
+
+/* Returns only if the title is not relaunching itself or the exec failed. */
+static void relaunch_self(uint32_t routine)
+{
+    static char env[sizeof(LAUNCH_ENV) + 1 + LAUNCH_PAGE_SIZE * 2];
+    uint32_t page = BRIDGE_MEM32(XBOX_KERNEL_DATA_BASE + KDATA_LAUNCH_DATA_PAGE);
+    uint32_t cert = BRIDGE_MEM32(XBE_CERT_ADDR_VA);
+    uint32_t i;
+    char *p;
+
+    if (routine != 2 || !page || !cert)
+        return;
+    if (BRIDGE_MEM32(page + 4) != BRIDGE_MEM32(cert + 8)) {
+        fprintf(stderr, "  [KERNEL] launch is for title 0x%08X, this is 0x%08X\n",
+                BRIDGE_MEM32(page + 4), BRIDGE_MEM32(cert + 8));
+        return;
+    }
+    p = env + sprintf(env, "%s=", LAUNCH_ENV);
+    for (i = 0; i < LAUNCH_PAGE_SIZE; i++)
+        p += sprintf(p, "%02X", BRIDGE_MEM8(page + i));
+    putenv(env);
+    fprintf(stderr, "  [KERNEL] title reboots into itself: restarting with its"
+                    " launch data\n");
+    fflush(stdout);
+    fflush(stderr);
+#ifdef _WIN32
+    {
+        /* ponytail: _spawnv does not quote arguments; paths with spaces in
+         * the command line would split. */
+        char exe[MAX_PATH];
+        GetModuleFileNameA(NULL, exe, MAX_PATH);
+        if (_spawnv(_P_NOWAIT, exe, (const char *const *)__argv) != -1)
+            ExitProcess(0);
+    }
+#else
+    {
+        static char buf[8192];
+        char *argv[64];
+        int argc = 0;
+        size_t n = 0, off = 0;
+        FILE *f = fopen("/proc/self/cmdline", "rb");
+
+        if (f) {
+            n = fread(buf, 1, sizeof buf - 1, f);
+            fclose(f);
+        }
+        buf[n] = 0;
+        while (off < n && argc < 63) {
+            argv[argc++] = buf + off;
+            off += strlen(buf + off) + 1;
+        }
+        argv[argc] = NULL;
+        /* The real path, not /proc/self/exe: exec'ing that link renames the
+         * process "exe". */
+        {
+            static char exe[4096];
+            ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
+            if (argc && len > 0) {
+                exe[len] = 0;
+                execv(exe, argv);
+            }
+        }
+    }
+#endif
+    fprintf(stderr, "  [KERNEL] relaunch failed; exiting instead\n");
+}
+
 /* HalReturnToFirmware(Routine) - the title asking to reboot or quit.
  *
  * It never returns on hardware. Returning here would let the game run on past
@@ -1850,6 +1963,7 @@ static void bridge_HalReturnToFirmware(void)
                     waited);
     }
 
+    relaunch_self(routine);
     xbox_HalReturnToFirmware(routine);
 }
 

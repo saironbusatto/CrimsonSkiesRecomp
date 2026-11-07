@@ -12,6 +12,15 @@ cmake_minimum_required(VERSION 3.20)
 
 project(crimsonskies C)
 
+# Lifted code is ~60 MB of C: at the default -O0 it runs too slowly to play.
+# The lifted memory accesses alias freely and rely on wrapping arithmetic.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+if(NOT MSVC)
+    add_compile_options(-fno-strict-aliasing -fwrapv)
+endif()
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 

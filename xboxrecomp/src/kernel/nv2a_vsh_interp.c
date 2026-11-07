@@ -332,7 +332,7 @@ static vec4 run_ilu(uint32_t op, vec4 c)
 int nv2a_vsh_run(const float in[NV2A_VSH_INPUTS][4], Nv2aVshOutput *out)
 {
     static int dump = -1;
-    static uint32_t dumped[16];
+    static uint32_t dumped[64];
     static int ndumped;
     vec4 temp[12], opos;
     float outregs[13][4];
@@ -341,7 +341,7 @@ int nv2a_vsh_run(const float in[NV2A_VSH_INPUTS][4], Nv2aVshOutput *out)
 
     if (dump < 0)
         dump = getenv("RECOMP_VSH_DUMP") != NULL;
-    if (dump && ndumped < 16) {
+    if (dump && ndumped < 64) {
         /* By content: titles reload different programs into the same slot. */
         uint32_t h = 2166136261u, t;
         int i, seen = 0;

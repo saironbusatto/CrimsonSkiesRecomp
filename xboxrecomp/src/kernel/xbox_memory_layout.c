@@ -860,7 +860,7 @@ int xbox_PosixMmioFault(void *ucv, uintptr_t fault)
     if (xbox_Ac97PosixFault(ucv, fault))
         return 1;
 #endif
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__x86_64__)
     if (xbox_OhciOwnsAddress(va))
         return xbox_OhciHandleMmio(ucv, va);
 #else
