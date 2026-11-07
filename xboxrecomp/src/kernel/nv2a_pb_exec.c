@@ -2842,6 +2842,30 @@ static void raster_xf_triangle(const Nv2aVshOutput *va, const Nv2aVshOutput *vb,
         { float r = T.fogc[2]; T.fogc[2] = T.fogc[0]; T.fogc[0] = r; }
     }
 
+    /* RECOMP_SLIVER_TRACE: log long, sub-pixel-wide triangles (drawn as a
+     * dotted line, since only one sample per AA block is shaded) with
+     * the batch that made them. */
+    {
+        static int sliver = -1, logged;
+        if (sliver < 0)
+            sliver = getenv("RECOMP_SLIVER_TRACE") != NULL;
+        if (sliver && logged < 200) {
+            float ex = fmaxf(a[0], fmaxf(b[0], c[0])) - fminf(a[0], fminf(b[0], c[0]));
+            float ey = fmaxf(a[1], fmaxf(b[1], c[1])) - fminf(a[1], fminf(b[1], c[1]));
+            float len = fmaxf(ex, ey), width = fabsf(area) / fmaxf(len, 1.0f);
+            if (len > 150.0f && width < 2.0f) {
+                logged++;
+                fprintf(stderr, "[SLIVER] len %.0f width %.2f prim %u n %u xf %u prog %05X tex %08X %ux%u fmt %02X"
+                        " blend %u %X/%X z %u/%X mask %u | %.1f,%.1f,%.0f,%.2f  %.1f,%.1f,%.0f,%.2f  %.1f,%.1f,%.0f,%.2f\n",
+                        len, width, s_gpu.prim, s_gpu.idx_count, s_gpu.xf_mode & 3,
+                        s_gpu.rc.stage_program, s_gpu.texs[0].offset, s_gpu.texs[0].width,
+                        s_gpu.texs[0].height, s_gpu.texs[0].color, s_gpu.blend_enable,
+                        s_gpu.blend_sfactor, s_gpu.blend_dfactor, s_gpu.depth_test,
+                        s_gpu.depth_func, s_gpu.depth_mask,
+                        a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3], c[0], c[1], c[2], c[3]);
+            }
+        }
+    }
     T.minx = (int)floorf(fminf(a[0], fminf(b[0], c[0])));
     T.maxx = (int)ceilf (fmaxf(a[0], fmaxf(b[0], c[0])));
     T.miny = (int)floorf(fminf(a[1], fminf(b[1], c[1])));
@@ -2909,11 +2933,33 @@ static void xf_lerp(const Nv2aVshOutput *a, const Nv2aVshOutput *b, float t,
         po[i] = pa[i] + (pb[i] - pa[i]) * t;
 }
 
+/* Guard band: how far past the surface edges a vertex may land before x/y
+ * clipping cuts the triangle. Without it a sky triangle clipped at the near
+ * plane put vertices tens of millions of pixels off screen, where a float
+ * holds only a few units: neighbours' shared edges stopped meeting and left
+ * sub-pixel wedges across the frame (dotted lines through Crimson Skies'
+ * sky and sea). The NV2A clips to a guard band the same way. */
+#define NV_GUARD_BAND 1024.0f
+#define NV_CLIP_PLANES 6
+
 /* Signed distance of a vertex in (x*w, y*w, z*w, w) to clip plane `pl`:
- * 0 is w = NV_CLIP_W, 1 the near plane. */
+ * 0 is w = NV_CLIP_W, 1 the near plane, 2-5 the guard band's left, right,
+ * top and bottom (screen x or y against a bound, times w). */
 static float xf_clip_dist(const Nv2aVshOutput *v, int pl)
 {
-    return pl == 0 ? v->pos[3] - NV_CLIP_W : v->pos[2] - s_xf_o[2] * v->pos[3];
+    float lo_x = (float)s_gpu.clip_x - NV_GUARD_BAND;
+    float hi_x = (float)(s_gpu.clip_x + s_gpu.clip_w) + NV_GUARD_BAND;
+    float lo_y = (float)s_gpu.clip_y - NV_GUARD_BAND;
+    float hi_y = (float)(s_gpu.clip_y + s_gpu.clip_h) + NV_GUARD_BAND;
+
+    switch (pl) {
+    case 0:  return v->pos[3] - NV_CLIP_W;
+    case 1:  return v->pos[2] - s_xf_o[2] * v->pos[3];
+    case 2:  return v->pos[0] - lo_x * v->pos[3];
+    case 3:  return hi_x * v->pos[3] - v->pos[0];
+    case 4:  return v->pos[1] - lo_y * v->pos[3];
+    default: return hi_y * v->pos[3] - v->pos[1];
+    }
 }
 
 /* Sutherland-Hodgman: clip polygon in[0..n) against plane pl into out. */
@@ -2933,7 +2979,7 @@ static int xf_clip_poly(const Nv2aVshOutput *in, int n, int pl,
              * bigger than NV_CLIP_W, and a w <= 0 divides to inf/NaN. */
             if (pl == 0)
                 v->pos[3] = NV_CLIP_W;
-            else
+            else if (pl == 1)
                 v->pos[2] = s_xf_o[2] * v->pos[3];
         }
     }
@@ -2945,20 +2991,22 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
 {
     static int near_z = -1;
     const Nv2aVshOutput *in[3];
-    Nv2aVshOutput p0[8], p1[8];
-    int n = 3, i, j, pl, planes, inside = 1;
+    /* Each plane adds at most one vertex: 3 + NV_CLIP_PLANES. */
+    Nv2aVshOutput buf[2][3 + NV_CLIP_PLANES], *p0 = buf[0], *p1 = buf[1], *tmp;
+    int n = 3, i, j, pl, inside = 1;
 
     if (near_z < 0) {
         const char *e = getenv("RECOMP_CLIP_NEAR_Z");
         near_z = !(e && e[0] == '0');
     }
-    planes = near_z ? 2 : 1;
     in[0] = a; in[1] = b; in[2] = c;
     for (i = 0; i < 3; i++) {
         p0[i] = *in[i];
         for (j = 0; j < 3; j++)
             p0[i].pos[j] = in[i]->pos[j] * in[i]->pos[3];
-        for (pl = 0; pl < planes; pl++) {
+        for (pl = 0; pl < NV_CLIP_PLANES; pl++) {
+            if (pl == 1 && !near_z)
+                continue;
             float d = xf_clip_dist(&p0[i], pl);
             if (d != d || d - d != 0.0f)
                 return;                       /* not finite: no position at all */
@@ -2970,11 +3018,12 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
         raster_xf_triangle(a, b, c);
         return;
     }
-    n = xf_clip_poly(p0, n, 0, p1);
-    if (planes > 1 && n)
-        n = xf_clip_poly(p1, n, 1, p0);
-    else
-        memcpy(p0, p1, sizeof p1);
+    for (pl = 0; pl < NV_CLIP_PLANES && n >= 3; pl++) {
+        if (pl == 1 && !near_z)
+            continue;
+        n = xf_clip_poly(p0, n, pl, p1);
+        tmp = p0; p0 = p1; p1 = tmp;
+    }
     if (n < 3) {
         s_gpu.tris_behind++;                  /* wholly clipped away */
         return;
