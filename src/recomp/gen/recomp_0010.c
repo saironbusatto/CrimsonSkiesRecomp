@@ -39658,19 +39658,131 @@ loc_0021365F: ;
 }
 
 /**
- * sub_00213C0E
- * Original: 0x00213C0E - 0x00213C2B (29 bytes, 11 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: standard_frame
+ * sub_00213C0E - D3DXLoadSurfaceFromSurface (native)
+ * Original: 0x00213C0E. 8 stdcall args, ret 32.
+ * The one caller seen (sub_000451A0, at boot) loads a 512x512 DXT1 picture
+ * into a 640x480 LIN_X8R8G8B8 surface for the loading screen; the old stub
+ * returned D3D_OK without copying, which left that surface black.
+ * ponytail: whole-surface copies only, source DXT1 or linear 32-bit, linear
+ * 32-bit destination, bilinear scaling for D3DX_DEFAULT. Anything else is
+ * logged and fails with E_FAIL so it shows up where it happens (issue #3).
  */
+#define XBOX_CONTIGUOUS_BASE    0x80000000u
+#define HRESULT_E_FAIL          0x80004005u
+#define XFMT_DXT1               0x0Cu
+#define XFMT_LIN_A8R8G8B8       0x12u
+#define XFMT_LIN_X8R8G8B8       0x1Eu
+
+typedef struct { uint32_t fmt, w, h, pitch; uint8_t *bits; } lsfs_surface;
+
+static int lsfs_describe(uint32_t surf, lsfs_surface *out)
+{
+    uint32_t format = MEM32(surf + 12), size = MEM32(surf + 16);
+
+    out->fmt = (format >> 8) & 0xFFu;
+    if (size) {
+        out->w = (size & 0xFFFu) + 1;
+        out->h = ((size >> 12) & 0xFFFu) + 1;
+        out->pitch = ((size >> 24) + 1) * 64;
+    } else {
+        out->w = 1u << ((format >> 20) & 0xFu);
+        out->h = 1u << ((format >> 24) & 0xFu);
+        out->pitch = out->fmt == XFMT_DXT1 ? ((out->w + 3) / 4) * 8 : out->w * 4;
+    }
+    out->bits = (uint8_t *)XBOX_PTR(MEM32(surf + 4) | XBOX_CONTIGUOUS_BASE);
+    return out->fmt == XFMT_DXT1 || out->fmt == XFMT_LIN_A8R8G8B8 || out->fmt == XFMT_LIN_X8R8G8B8;
+}
+
+static uint32_t lsfs_565(uint32_t c)
+{
+    uint32_t r = (c >> 11) & 31, g = (c >> 5) & 63, b = c & 31;
+    return 0xFF000000u | ((r * 255 / 31) << 16) | ((g * 255 / 63) << 8) | (b * 255 / 31);
+}
+
+static uint32_t lsfs_mix(uint32_t a, uint32_t b, uint32_t wa, uint32_t wb, uint32_t div)
+{
+    uint32_t out = 0;
+    for (int s = 0; s < 32; s += 8)
+        out |= ((((a >> s) & 0xFF) * wa + ((b >> s) & 0xFF) * wb) / div) << s;
+    return out;
+}
+
+/* Decode a DXT1 surface to w*h ARGB texels (alpha 0 for 1-bit transparent). */
+static void lsfs_decode_dxt1(const lsfs_surface *s, uint32_t *out)
+{
+    for (uint32_t by = 0; by < s->h; by += 4) {
+        const uint8_t *row = s->bits + (by / 4) * s->pitch;
+        for (uint32_t bx = 0; bx < s->w; bx += 4) {
+            const uint8_t *blk = row + (bx / 4) * 8;
+            uint32_t c0 = blk[0] | (blk[1] << 8), c1 = blk[2] | (blk[3] << 8);
+            uint32_t idx = blk[4] | (blk[5] << 8) | (blk[6] << 16) | ((uint32_t)blk[7] << 24);
+            uint32_t pal[4] = { lsfs_565(c0), lsfs_565(c1), 0, 0 };
+            if (c0 > c1) {
+                pal[2] = lsfs_mix(pal[0], pal[1], 2, 1, 3);
+                pal[3] = lsfs_mix(pal[0], pal[1], 1, 2, 3);
+            } else {
+                pal[2] = lsfs_mix(pal[0], pal[1], 1, 1, 2);
+            }
+            for (uint32_t i = 0; i < 16; i++) {
+                uint32_t x = bx + (i & 3), y = by + (i >> 2);
+                if (x < s->w && y < s->h)
+                    out[y * s->w + x] = pal[(idx >> (2 * i)) & 3];
+            }
+        }
+    }
+}
+
+static uint32_t load_surface_from_surface(uint32_t dst_va, uint32_t dst_pal, uint32_t dst_rect,
+                                          uint32_t src_va, uint32_t src_pal, uint32_t src_rect)
+{
+    lsfs_surface d, s;
+    uint32_t *src_px;
+
+    if (!dst_va || !src_va || dst_pal || src_pal || dst_rect || src_rect ||
+        !lsfs_describe(dst_va, &d) || !lsfs_describe(src_va, &s) || d.fmt == XFMT_DXT1) {
+        fprintf(stderr, "[D3DX] LoadSurfaceFromSurface: unsupported call dst=0x%08X src=0x%08X "
+                "rects=%08X/%08X pals=%08X/%08X\n", dst_va, src_va, dst_rect, src_rect, dst_pal, src_pal);
+        return HRESULT_E_FAIL;
+    }
+
+    src_px = malloc((size_t)s.w * s.h * 4);
+    if (!src_px)
+        return HRESULT_E_FAIL;
+    if (s.fmt == XFMT_DXT1) {
+        lsfs_decode_dxt1(&s, src_px);
+    } else {
+        for (uint32_t y = 0; y < s.h; y++)
+            memcpy(src_px + y * s.w, s.bits + y * s.pitch, s.w * 4);
+    }
+
+    /* Bilinear, sampling texel centres, in 16.16 fixed point. */
+    for (uint32_t y = 0; y < d.h; y++) {
+        uint32_t *drow = (uint32_t *)(d.bits + y * d.pitch);
+        int64_t fy = ((int64_t)(2 * y + 1) * s.h * 65536) / (2 * d.h) - 32768;
+        if (fy < 0) fy = 0;
+        uint32_t y0 = (uint32_t)(fy >> 16), y1 = y0 + 1 < s.h ? y0 + 1 : y0, wy = (uint32_t)(fy & 0xFFFF) >> 8;
+        for (uint32_t x = 0; x < d.w; x++) {
+            int64_t fx = ((int64_t)(2 * x + 1) * s.w * 65536) / (2 * d.w) - 32768;
+            if (fx < 0) fx = 0;
+            uint32_t x0 = (uint32_t)(fx >> 16), x1 = x0 + 1 < s.w ? x0 + 1 : x0, wx = (uint32_t)(fx & 0xFFFF) >> 8;
+            uint32_t top = lsfs_mix(src_px[y0 * s.w + x0], src_px[y0 * s.w + x1], 256 - wx, wx, 256);
+            uint32_t bot = lsfs_mix(src_px[y1 * s.w + x0], src_px[y1 * s.w + x1], 256 - wx, wx, 256);
+            uint32_t px = lsfs_mix(top, bot, 256 - wy, wy, 256);
+            drow[x] = d.fmt == XFMT_LIN_X8R8G8B8 ? (px | 0xFF000000u) : px;
+        }
+    }
+    free(src_px);
+    return 0; /* D3D_OK */
+}
+
 void sub_00213C0E(void)
 {
-    /* D3DXLoadSurfaceFromSurface(pDestSurface, pDestPalette, pDestRect, pSrcSurface, pSrcPalette, pSrcRect, Filter, ColorKey)
-     * Stdcall: 8 arguments (32 bytes) popped by callee + 4 ret addr. Total = esp += 36.
-     */
-    eax = 0; /* D3D_OK */
+    /* D3DXLoadSurfaceFromSurface(pDestSurface, pDestPalette, pDestRect,
+     *                            pSrcSurface, pSrcPalette, pSrcRect, Filter, ColorKey).
+     * Filter is treated as bilinear whatever it asks for; ColorKey is ignored. */
+    eax = load_surface_from_surface(MEM32(esp + 4), MEM32(esp + 8), MEM32(esp + 12),
+                                    MEM32(esp + 16), MEM32(esp + 20), MEM32(esp + 24));
     esp += 36;
-    return;
 }
 
 /**
