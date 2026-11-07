@@ -211,6 +211,9 @@ static void open_controllers(void)
         if (!g_pads[slot]) {
             g_pads[slot] = SDL_GameControllerOpen(i);
             g_controller_connected[slot] = (g_pads[slot] != NULL);
+            if (g_pads[slot])
+                fprintf(stderr, "[INPUT] controller %d: %s\n", slot + 1,
+                        SDL_GameControllerName(g_pads[slot]));
         }
         slot++;
     }
@@ -232,6 +235,21 @@ DWORD xbox_InputGetState(DWORD dwPort, XBOX_INPUT_STATE *pState)
         return ERROR_DEVICE_NOT_CONNECTED;
 
     SDL_GameController *c = g_pads[dwPort];
+    if (!c || !SDL_GameControllerGetAttached(c)) {
+        /* Plugged in after start, or unplugged and back: drop the stale
+         * handle and look again, at most once a second. */
+        static Uint32 last_scan;
+        Uint32 now = SDL_GetTicks();
+        if (c) {
+            SDL_GameControllerClose(c);
+            g_pads[dwPort] = NULL;
+        }
+        if (now - last_scan > 1000) {
+            last_scan = now;
+            open_controllers();
+        }
+        c = g_pads[dwPort];
+    }
     if (!c || !SDL_GameControllerGetAttached(c)) {
         g_controller_connected[dwPort] = FALSE;
         if (dwPort == 0 && xbox_InputKeyboardPoll(pState))
